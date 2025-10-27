@@ -12,11 +12,11 @@ CORS(app)
 # --- Configurações do banco de dados MySQL ---
 # MELHORIA DE SEGURANÇA: Em produção, use variáveis de ambiente!
 # Ex: os.environ.get('MYSQL_USER', 'root')
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'Foda12345' # Mude esta senha e use variáveis de ambiente
-app.config['MYSQL_DB'] = 'task_flowup'
-app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+# Lê as variáveis de ambiente fornecidas pelo servidor (ex: Render)
+app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST')
+app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER')
+app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD')
+app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB')
 
 mysql = MySQL(app)
 
@@ -739,4 +739,5 @@ def impersonate_login():
 
 
 if __name__ == '__main__':
+
     app.run(debug=True, port=5001)
