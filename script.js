@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- VARIÁVEIS GLOBAIS ---
-    const API_URL = 'http://127.0.0.1:5001/api';
+   // Exemplo de como DEVE ficar:
+    const API_URL = 'https://meu-task-flowup.onrender.com/api';
     let currentUser = null;
     let allTasks = [];
     let currentFilter = 'all';
@@ -1274,4 +1275,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+
 });
