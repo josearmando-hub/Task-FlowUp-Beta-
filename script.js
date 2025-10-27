@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- VARIÁVEIS GLOBAIS ---
-    const API_URL = 'http://127.0.0.1:5001/api';
+    // MODIFICADO: Removido o 'http://127.0.0.1:5001' para usar um caminho relativo
+    const API_URL = '/api'; //
     let currentUser = null;
     let allTasks = [];
     let currentFilter = 'all';
