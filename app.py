@@ -12,10 +12,11 @@ CORS(app)
 # --- Configurações do banco de dados MySQL ---
 # MELHORIA DE SEGURANÇA: Em produção, use variáveis de ambiente!
 # Ex: os.environ.get('MYSQL_USER', 'root')
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'Foda12345' # Mude esta senha e use variáveis de ambiente
-app.config['MYSQL_DB'] = 'task_flowup'
+# MODIFICADO: Agora usa Variáveis de Ambiente (para o Render) ou valores padrão (para rodar local)
+app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', 'localhost') #
+app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root') #
+app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'Foda12345') #
+app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'task_flowup') #
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 
 mysql = MySQL(app)
