@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- VARIÁVEIS GLOBAIS ---
-    // MODIFICADO: Removido o 'http://127.0.0.1:5001' para usar um caminho relativo
-    const API_URL = '/api'; //
+    const API_URL = 'http://127.0.0.1:5001/api';
     let currentUser = null;
     let allTasks = [];
     let currentFilter = 'all';
@@ -633,8 +632,26 @@ document.addEventListener('DOMContentLoaded', () => {
             
         try {
             const response = await fetch(`${API_URL}/admin/users?admin_user_id=${currentUser.id}`);
-            if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível carregar os usuários.');
+            
+            // --- INÍCIO DA CORREÇÃO ---
+            // PRIMEIRO checa se a resposta foi OK
+            if (!response.ok) {
+                // Se não foi OK, tenta ler a resposta como JSON (para a msg de erro)
+                // Mas se falhar (porque é HTML), joga um erro genérico
+                let errorMsg = 'Não foi possível carregar os usuários.';
+                try {
+                    const errorData = await response.json(); // Tenta ler o corpo do erro
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    // Falhou ao ler o JSON (era HTML), usa o status
+                    errorMsg = `Erro ${response.status}: ${response.statusText}`;
+                }
+                throw new Error(errorMsg); // Joga o erro
+            }
+
+            // Se chegou aqui, a resposta ESTÁ OK e é seguro ler o JSON
             const users = await response.json();
+            // --- FIM DA CORREÇÃO ---
             
             const container = document.getElementById('user-management-container');
             if (users.length === 0) {
