@@ -2,16 +2,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- VARIÁVEIS GLOBAIS ---
     const API_URL = 'http://127.0.0.1:5001/api';
     let currentUser = null;
-    let allTasks = [];
+    let allTasks = []; // Armazena todas as tarefas para reuso
     let currentFilter = 'all';
     let editTaskModal, commentsModal, confirmationModal, forceResetModal, adminUserEditModal;
+    let quickAddTaskModal; 
 
     // --- SELETORES DO DOM ---
     const authContainer = document.querySelector('.auth-container');
     const appContainer = document.querySelector('.app-container');
     const mainContent = document.getElementById('main-content');
     
-    // --- SELETORES DE IMPERSONAÇÃO (Variável 'stopImpersonationBtn' REMOVIDA daqui) ---
     const impersonationBanner = document.getElementById('impersonation-banner');
     const impersonationUsername = document.getElementById('impersonation-username');
 
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('show-forgot-password').addEventListener('click', (e) => { e.preventDefault(); showSection(document.getElementById('forgot-password-section')); });
     document.getElementById('show-login-from-forgot').addEventListener('click', (e) => { e.preventDefault(); showSection(document.getElementById('login-section')); });
 
-    // Registration (com alteração)
+    // Registration (sem alterações)
     try {
         document.getElementById('register-form').elements.role.forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -50,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
             email: document.getElementById('register-email').value.trim(),
             job_title: document.getElementById('register-job-title').value.trim(),
             adminKey: document.getElementById('admin-key').value,
-            // MELHORIA LGPD: Envia o status do consentimento
             consent: e.target.elements['register-consent'].checked
         };
         try {
@@ -94,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Forgot password (com alteração)
+    // Forgot password (sem alterações)
     document.getElementById('forgot-password-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fb = document.getElementById('forgot-feedback');
@@ -108,9 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro ao recuperar senha');
-            
-            // MELHORIA LGPD/SEGURANÇA: Nunca exiba a senha temporária no frontend.
-            // Apenas mostre a mensagem de sucesso genérica do backend.
             fb.textContent = data.message;
             fb.classList.add('text-success');
             
@@ -139,7 +135,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(data.error || 'Erro ao resetar senha');
                 alert('Senha atualizada com sucesso!');
                 forceResetModal.hide();
-                // O usuário não está mais "impersonando" se ele teve que resetar
                 if (currentUser.impersonating) {
                     localStorage.removeItem('originalAdminSession');
                 }
@@ -160,59 +155,54 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('header-username').textContent = currentUser.username;
         
         const isAdmin = currentUser.role === 'admin';
+
+        // Mostrar/Esconder botão de Adição Rápida
+        document.getElementById('quick-add-task-btn').style.display = (currentUser) ? 'flex' : 'none';
         
-        // --- ATUALIZAÇÃO PARA IMPERSONAÇÃO E LINKS DE ADMIN ---
+        // Lógica de Impersonação e Links de Admin
         const navLogout = document.getElementById('nav-logout');
         
         if (currentUser.impersonating) {
-            // Está impersonando
             impersonationBanner.style.display = 'flex';
             impersonationUsername.textContent = currentUser.username;
-            // Altera o botão de logout para "Parar Impersonação"
             navLogout.innerHTML = `<a href="#"><i class="bi bi-box-arrow-in-right"></i><span>Retornar ao Admin</span></a>`;
-            // Esconde links de admin mesmo se o usuário impersonado for admin
             document.getElementById('nav-activity-log').style.display = 'none';
             document.getElementById('nav-ssap').style.display = 'none';
+            document.getElementById('nav-dpo').style.display = 'none';
         } else {
-            // Sessão normal
             impersonationBanner.style.display = 'none';
-            // Garante que o botão de logout esteja no estado normal
             navLogout.innerHTML = `<a href="#"><i class="bi bi-box-arrow-left"></i><span>Sair</span></a>`;
-            // Mostra/esconde links de admin baseado no role real
             document.getElementById('nav-activity-log').style.display = isAdmin ? 'list-item' : 'none';
             document.getElementById('nav-ssap').style.display = isAdmin ? 'list-item' : 'none';
+            document.getElementById('nav-dpo').style.display = isAdmin ? 'list-item' : 'none';
         }
         
-        // Configura event listeners APÓS o HTML do botão de logout ser definido
         setupEventListeners();
         renderView('dashboard');
+        
+        // --- Inicia o sistema de notificação ---
+        initializeNotificationState();
     }
     
     function logout() {
-        // --- ATUALIZAÇÃO PARA IMPERSONAÇÃO ---
         if (currentUser && currentUser.impersonating) {
-            // --- ESTÁ SAINDO DA IMPERSONAÇÃO ---
             const adminSessionStr = localStorage.getItem('originalAdminSession');
             localStorage.removeItem('originalAdminSession');
             if (adminSessionStr) {
                 const adminSession = JSON.parse(adminSessionStr);
-                // Restaura a sessão do admin
                 startSession(adminSession);
             } else {
-                // Failsafe: se não encontrar a sessão do admin, faz logout completo
                 performFullLogout();
             }
         } else {
-            // --- LOGOUT NORMAL ---
             performFullLogout();
         }
     }
     
     function performFullLogout() {
-        // Esta é a lógica de logout original
         currentUser = null; 
         allTasks = [];
-        localStorage.removeItem('originalAdminSession'); // Limpa por segurança
+        localStorage.removeItem('originalAdminSession'); 
         appContainer.style.display = 'none';
         mainContent.innerHTML = '';
         document.getElementById('chat-container').style.display = 'none';
@@ -221,12 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-form').reset();
     }
 
-    // --- ================================== ---
-    // --- EVENT LISTENERS GERAIS (CORRIGIDO) ---
-    // --- ================================== ---
+    // --- EVENT LISTENERS GERAIS (sem alterações) ---
     function setupEventListeners() {
-        // Remove listeners antigos para evitar duplicação
-        
         const oldToggle = document.getElementById('sidebar-toggle');
         if (oldToggle && oldToggle.parentNode) {
             const newToggle = oldToggle.cloneNode(true);
@@ -243,8 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
             newLogout.addEventListener('click', logout);
         }
         
-        // O botão de parar impersonação no banner também chama a função logout
-        // AQUI ESTÁ A CORREÇÃO: Busca o elemento do DOM toda vez, em vez de usar uma variável global obsoleta.
         const oldStopImpersonation = document.getElementById('stop-impersonation-btn');
         if (oldStopImpersonation && oldStopImpersonation.parentNode) {
             const newStopImpersonation = oldStopImpersonation.cloneNode(true);
@@ -261,8 +245,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Listener para o botão de Adição Rápida
+        const oldQuickAddBtn = document.getElementById('quick-add-task-btn');
+        if (oldQuickAddBtn && oldQuickAddBtn.parentNode) {
+            const newQuickAddBtn = oldQuickAddBtn.cloneNode(true);
+            oldQuickAddBtn.parentNode.replaceChild(newQuickAddBtn, oldQuickAddBtn);
+            newQuickAddBtn.addEventListener('click', handleOpenQuickAddModal);
+        }
+
         document.querySelectorAll('#sidebar .components li').forEach(item => {
-            if (item && item.parentNode) { // Adiciona verificação de segurança
+            if (item && item.parentNode) {
                 const newItem = item.cloneNode(true);
                 item.parentNode.replaceChild(newItem, item);
                 newItem.addEventListener('click', (e) => {
@@ -278,23 +270,29 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderView(viewName) {
         document.querySelector('#sidebar .components li.active')?.classList.remove('active');
         document.querySelector(`#sidebar .components li[data-view="${viewName}"]`)?.classList.add('active');
-        document.getElementById('header-search-container').style.display = 'none';
+        
+        const searchContainer = document.getElementById('header-search-container');
+        searchContainer.style.display = (viewName === 'dashboard') ? 'block' : 'none';
 
         if (viewName === 'dashboard') renderDashboardView();
         else if (viewName === 'analytics') renderAnalyticsView();
         else if (viewName === 'profile') renderProfileView();
+        // --- RESTAURADO ---
         else if (viewName === 'team') renderTeamView();
+        // --- ---
         else if (viewName === 'log') renderActivityLogView();
-        else if (viewName === 'ssap') renderSSAPView(); // NOVA VIEW
+        else if (viewName === 'ssap') renderSSAPView(); 
+        else if (viewName === 'dpo') renderDpoView();
     }
 
-    // --- PROFILE VIEW ---
+    // --- PROFILE VIEW (sem alterações) ---
     async function renderProfileView() {
         mainContent.innerHTML = `
             <div class="content-header"><h2>Meu Perfil</h2></div>
             <div class="row">
-                <div class="col-lg-6">
-                    <div class="card"><div class="card-header"><h5 class="mb-0">Detalhes do Perfil</h5></div>
+
+                <div class="col-lg-7">
+                    <div class="card mb-4"><div class="card-header"><h5 class="mb-0">Detalhes do Perfil</h5></div>
                     <div class="card-body">
                         <form id="profile-form">
                             <div class="mb-3">
@@ -315,8 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${currentUser.impersonating ? '<p class="text-danger small mt-2">Você não pode editar um perfil enquanto estiver impersonando.</p>' : ''}
                         </form>
                     </div></div>
-                </div>
-                <div class="col-lg-6">
+
                     <div class="card"><div class="card-header"><h5 class="mb-0">Alterar Senha</h5></div>
                     <div class="card-body">
                         <form id="change-password-form">
@@ -339,22 +336,98 @@ document.addEventListener('DOMContentLoaded', () => {
                         </form>
                     </div></div>
                 </div>
-                
+
+                <div class="col-lg-5">
+                    <div class="card mb-4">
+                        <div class="card-header"><h5 class="mb-0">Minhas Estatísticas</h5></div>
+                        <div class="card-body">
+                            <div class="stat-item-wrapper">
+                                <div class="stat-item">
+                                    <div id="stat-my-completed" class="stat-item-number success">0</div>
+                                    <div class="stat-item-label">Concluídas</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div id="stat-my-pending" class="stat-item-number pending">0</div>
+                                    <div class="stat-item-label">Pendentes</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div id="stat-my-overdue" class="stat-item-number danger">0</div>
+                                    <div class="stat-item-label">Atrasadas</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><h5 class="mb-0">Central de Privacidade (LGPD)</h5></div>
+                        <div class="card-body">
+                            <p class="text-muted small">Use este formulário para enviar uma solicitação formal ao nosso Encarregado de Proteção de Dados (DPO).</p>
+                            <form id="dpo-request-form">
+                                <div class="mb-3">
+                                    <label for="dpo-request-type" class="form-label">Tipo de Solicitação</label>
+                                    <select id="dpo-request-type" class="form-select" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="access">Solicitar cópia dos meus dados</option>
+                                        <option value="correction">Solicitar correção de dados</option>
+                                        <option value="anonymization">Solicitar anonimização (exclusão)</option>
+                                        <option value="question">Dúvida geral sobre privacidade</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="dpo-request-message" class="form-label">Mensagem</label>
+                                    <textarea id="dpo-request-message" class="form-control" rows="4" placeholder="Detalhe sua solicitação aqui..." required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-outline-primary w-100">Enviar para o DPO</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header"><h5 class="mb-0">Minhas Solicitações DPO</h5></div>
+                        <div class="card-body">
+                            <div id="my-dpo-requests-list" style="max-height: 400px; overflow-y: auto;">
+                                <div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="col-12 mt-4">
                     <div class="card border-danger">
                         <div class="card-header bg-danger text-white"><h5 class="mb-0">Zona de Perigo</h5></div>
                         <div class="card-body">
-                            <p class="text-muted">Esta ação não pode ser desfeita. Sua conta será permanentemente anonimizada, removendo todos os seus dados pessoais (e-mail, nome de usuário) e limpando seus comentários e mensagens do chat. Suas tarefas criadas permanecerão, mas serão atribuídas a um "usuário anônimo".</p>
+                            <p class="text-muted">Esta ação (anonimização) também pode ser solicitada formalmente ao DPO. Se você fizer por conta própria, a ação é imediata e não pode ser desfeita.</p>
                             <button id="delete-account-btn" class="btn btn-danger" ${currentUser.impersonating ? 'disabled' : ''}>
-                                Excluir Minha Conta Permanentemente
+                                Anonimizar Minha Conta Agora
                             </button>
                             ${currentUser.impersonating ? '<p class="text-danger small mt-2">Ações de exclusão estão desabilitadas durante a impersonação.</p>' : ''}
                         </div>
                     </div>
                 </div>
             </div>`;
+            
+        // --- Lógica das Novas Features ---
+        // 1. Calcular Minhas Estatísticas
+        if (allTasks.length > 0) {
+            const myTasks = allTasks.filter(t => t.assigned_to_id === currentUser.id);
+            const completed = myTasks.filter(t => t.completed).length;
+            const pending = myTasks.length - completed;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const overdue = myTasks.filter(t => !t.completed && t.due_date && new Date(t.due_date + 'T00:00:00') < today).length;
+
+            document.getElementById('stat-my-completed').textContent = completed;
+            document.getElementById('stat-my-pending').textContent = pending;
+            document.getElementById('stat-my-overdue').textContent = overdue;
+        }
+        
+        // 2. Adicionar Listener do Formulário DPO
+        document.getElementById('dpo-request-form').addEventListener('submit', handleDpoRequest);
+        // --- Fim da Lógica das Novas Features ---
+
+
+        // Carregar dados do perfil (lógica original)
         try {
-            // Pega dados do usuário ATUAL (seja ele normal ou impersonado)
             const response = await fetch(`${API_URL}/user/${currentUser.id}`);
             if (!response.ok) throw new Error('Não foi possível carregar os dados do perfil.');
             const userData = await response.json();
@@ -365,9 +438,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('profile-error').textContent = error.message;
         }
 
+        // Listeners dos formulários (lógica original)
         document.getElementById('profile-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (currentUser.impersonating) return; // Segurança
+            if (currentUser.impersonating) return;
             
             const errorEl = document.getElementById('profile-error');
             const successEl = document.getElementById('profile-success');
@@ -377,7 +451,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 username: document.getElementById('profile-username').value.trim(),
                 email: document.getElementById('profile-email').value.trim(),
                 job_title: document.getElementById('profile-job-title').value.trim(),
-                // ATUALIZADO: Envia quem está fazendo a ação
                 acting_user_id: currentUser.id 
             };
             try {
@@ -388,7 +461,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Erro ao atualizar perfil');
-                // Atualiza o objeto currentUser local
                 currentUser.username = data.user.username;
                 currentUser.email = data.user.email;
                 currentUser.jobTitle = data.user.job_title;
@@ -401,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('change-password-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (currentUser.impersonating) return; // Segurança
+            if (currentUser.impersonating) return;
 
             const errorEl = document.getElementById('password-error');
             const successEl = document.getElementById('password-success');
@@ -420,7 +492,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: currentUser.id, oldPassword, newPassword })
                 });
-                // ATUALIZADO: 'res' não estava definido, trocado por 'response'
                 const data = await response.json(); 
                 if (!response.ok) throw new Error(data.error || 'Erro ao alterar senha');
                 successEl.textContent = data.message;
@@ -430,15 +501,42 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // MELHORIA LGPD: Adiciona listener para o novo botão de exclusão
         document.getElementById('delete-account-btn').addEventListener('click', handleDeleteSelfAccount);
+
+        loadMyDpoRequests();
     }
     
-    // --- ================================== ---
-    // --- NOVA FUNÇÃO (LGPD - Auto-Exclusão) ---
-    // --- ================================== ---
+    // --- FUNÇÃO DPO (sem alterações) ---
+    async function handleDpoRequest(e) {
+        e.preventDefault();
+        const requestType = document.getElementById('dpo-request-type').value;
+        const message = document.getElementById('dpo-request-message').value;
+        try {
+            const response = await fetch(`${API_URL}/dpo-request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    acting_user_id: currentUser.id,
+                    request_type: requestType,
+                    message_text: message
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Erro ao enviar solicitação.');
+            
+            alert(data.message); 
+            e.target.reset();
+            loadMyDpoRequests();
+
+        } catch (error) {
+            alert(`Erro: ${error.message}`);
+        }
+    }
+
+
+    // --- FUNÇÃO LGPD (sem alterações) ---
     function handleDeleteSelfAccount(e) {
-        if (currentUser.impersonating) return; // Segurança
+        if (currentUser.impersonating) return;
 
         const confirmationText = 'Tem certeza que deseja EXCLUIR sua conta? Esta ação é permanente e irá anonimizar todos os seus dados pessoais (nome, e-mail) e limpar seus comentários e mensagens de chat.';
         
@@ -453,7 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch(`${API_URL}/user/delete-self`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: currentUser.id }) // Envia o ID do usuário logado
+                    body: JSON.stringify({ user_id: currentUser.id })
                 });
                 
                 const data = await res.json();
@@ -462,7 +560,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 confirmationModal.hide();
                 alert(data.message || 'Conta excluída/anonimizada com sucesso.');
                 
-                // Faz o logout completo do usuário
                 performFullLogout(); 
                 
             } catch (err) {
@@ -474,15 +571,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- DASHBOARD (TAREFAS) ---
+    // --- DASHBOARD (sem alterações) ---
     async function renderDashboardView() {
         const searchContainer = document.getElementById('header-search-container');
-        searchContainer.style.display = 'block';
         searchContainer.innerHTML = `<input type="search" id="task-search-input" class="form-control" placeholder="🔍 Buscar tarefas...">`;
         document.getElementById('task-search-input').addEventListener('input', renderTasks);
         
-        // Define se botões de admin (criar/editar/excluir) devem estar ativos
-        // NÃO DEVEM estar ativos se estiver impersonando.
         const isAdminView = (currentUser.role === 'admin' && !currentUser.impersonating);
 
         mainContent.innerHTML = `
@@ -494,6 +588,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" class="btn btn-outline-primary" data-filter="overdue">Atrasadas</button>
                 </div>
             </div>
+
+            <div id="due-soon-container" class="due-soon-panel" style="display: none;">
+                <h5><i class="bi bi-alarm-fill"></i>Vencendo em Breve</h5>
+                <ul id="due-soon-list" class="due-soon-list">
+                </ul>
+            </div>
+            
             <div id="add-task-card" class="card my-4" style="display: ${isAdminView ? 'block' : 'none'}">
                 <div class="card-header bg-white py-3"><h5 class="mb-0 fw-bold">Adicionar Nova Tarefa</h5></div>
                 <div class="card-body p-4"><form id="task-form"></form></div>
@@ -518,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchAndRenderTasks();
     }
 
-    // --- ANALYTICS VIEW ---
+    // --- ANALYTICS VIEW (sem alterações) ---
     async function renderAnalyticsView() {
         mainContent.innerHTML = `
             <div class="content-header"><h2>Análise de Desempenho</h2></div>
@@ -540,7 +641,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- TEAM VIEW ---
+    // --- ================================== ---
+    // --- FUNÇÃO RESTAURADA: Membros da Equipe ---
+    // --- ================================== ---
     async function renderTeamView() {
         mainContent.innerHTML = `
             <div class="content-header"><h2>Membros da Equipe</h2></div>
@@ -560,11 +663,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- ACTIVITY LOG VIEW ---
+    // --- ACTIVITY LOG VIEW (sem alterações) ---
     async function renderActivityLogView() {
         mainContent.innerHTML = `
             <div class="content-header">
                 <h2>Log de Atividades do Sistema</h2>
+                <button id="purge-chat-btn" class="btn btn-danger">
+                    <i class="bi bi-trash-fill"></i> Limpar Histórico do Chat
+                </button>
             </div>
             <div class="card">
                 <div class="card-body">
@@ -573,6 +679,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
             </div>`;
+        
+        document.getElementById('purge-chat-btn').addEventListener('click', handleAdminPurgeChat);
+
         
         try {
             const response = await fetch(`${API_URL}/activity-log`);
@@ -614,9 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- ================================== ---
-    // --- NOVA VIEW: SSAP (User Management) ---
-    // --- ================================== ---
+    // --- VIEW SSAP (sem alterações) ---
     async function renderSSAPView() {
         mainContent.innerHTML = `
             <div class="content-header">
@@ -632,26 +739,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
         try {
             const response = await fetch(`${API_URL}/admin/users?admin_user_id=${currentUser.id}`);
-            
-            // --- INÍCIO DA CORREÇÃO ---
-            // PRIMEIRO checa se a resposta foi OK
-            if (!response.ok) {
-                // Se não foi OK, tenta ler a resposta como JSON (para a msg de erro)
-                // Mas se falhar (porque é HTML), joga um erro genérico
-                let errorMsg = 'Não foi possível carregar os usuários.';
-                try {
-                    const errorData = await response.json(); // Tenta ler o corpo do erro
-                    errorMsg = errorData.error || errorMsg;
-                } catch (e) {
-                    // Falhou ao ler o JSON (era HTML), usa o status
-                    errorMsg = `Erro ${response.status}: ${response.statusText}`;
-                }
-                throw new Error(errorMsg); // Joga o erro
-            }
-
-            // Se chegou aqui, a resposta ESTÁ OK e é seguro ler o JSON
+            if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível carregar os usuários.');
             const users = await response.json();
-            // --- FIM DA CORREÇÃO ---
             
             const container = document.getElementById('user-management-container');
             if (users.length === 0) {
@@ -678,7 +767,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? `<span class="badge bg-primary role-badge">Admin</span>` 
                     : `<span class="badge bg-secondary role-badge">Funcionário</span>`;
                 
-                // Desabilita botões de ação para o próprio admin
                 const actions = isCurrentUser ? '<span class="text-muted small">Não é possível alterar a si mesmo</span>' : `
                     <button class="btn btn-sm btn-outline-secondary" title="Impersonar" data-action="impersonate" data-id="${user.id}" data-username="${user.username}"><i class="bi bi-person-fill-gear"></i> Impersonar</button>
                     <button class="btn btn-sm btn-outline-primary" title="Editar" data-action="edit" data-id="${user.id}"><i class="bi bi-pencil"></i></button>
@@ -699,7 +787,6 @@ document.addEventListener('DOMContentLoaded', () => {
             tableHtml += `</tbody></table>`;
             container.innerHTML = tableHtml;
             
-            // Adiciona event listeners para os botões da tabela
             container.addEventListener('click', (e) => {
                 const button = e.target.closest('button[data-action]');
                 if (!button) return;
@@ -719,28 +806,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- FUNÇÃO "VENCENDO EM BREVE" (sem alterações) ---
+    function renderDueSoonTasks() {
+        const container = document.getElementById('due-soon-container');
+        const listEl = document.getElementById('due-soon-list');
+        if (!container || !listEl) return; 
 
-    // --- RENDERIZAÇÃO DAS TAREFAS ---
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const sevenDaysFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+        
+        const dueSoonTasks = allTasks.filter(task => {
+            if (task.completed || !task.due_date) return false;
+            const dueDate = new Date(task.due_date + 'T00:00:00');
+            return dueDate >= today && dueDate <= sevenDaysFromNow;
+        });
+
+        dueSoonTasks.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+
+        if (dueSoonTasks.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        listEl.innerHTML = ''; 
+
+        dueSoonTasks.forEach(task => {
+            const dueDate = new Date(task.due_date + 'T00:00:00');
+            const daysLeft = Math.round((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            
+            let dateClass = '';
+            let dateText = '';
+
+            if (daysLeft === 0) {
+                dateText = 'Vence hoje!';
+                dateClass = 'due-date'; // Vermelho
+            } else if (daysLeft === 1) {
+                dateText = 'Vence amanhã!';
+                dateClass = 'due-date-warning'; // Amarelo
+            } else if (daysLeft <= 3) {
+                dateText = `Vence em ${daysLeft} dias`;
+                dateClass = 'due-date-warning'; // Amarelo
+            } else {
+                dateText = `Vence em ${daysLeft} dias`;
+            }
+
+            listEl.innerHTML += `
+                <li>
+                    <span class="task-title">${task.title}</span>
+                    <span class="${dateClass}">${dateText}</span>
+                </li>
+            `;
+        });
+    }
+
+    // --- RENDERIZAÇÃO DAS TAREFAS (sem alterações) ---
     function renderTasks() {
         const searchTerm = document.getElementById('task-search-input')?.value.toLowerCase() || '';
         const filteredBySearch = allTasks.filter(task => (task.title || '').toLowerCase().includes(searchTerm) || (task.description || '').toLowerCase().includes(searchTerm));
+        
+        renderDueSoonTasks(); 
+
         const tasksToRender = filteredBySearch.filter(task => {
             if (currentFilter === 'mine') return task.assigned_to_id === currentUser.id;
-            if (currentFilter === 'overdue') return !task.completed && task.due_date && new Date(task.due_date) < new Date();
+            if (currentFilter === 'overdue') {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return !task.completed && task.due_date && new Date(task.due_date + 'T00:00:00') < today;
+            }
             return true;
         });
+        
         const taskList = mainContent.querySelector('#task-list');
         if (!taskList) return;
         taskList.innerHTML = tasksToRender.length === 0 ? '<p class="text-center text-muted">Nenhuma tarefa encontrada.</p>' : '';
         
-        // Define se botões de admin (editar/excluir) devem estar visíveis
         const isAdminView = (currentUser.role === 'admin' && !currentUser.impersonating);
         
         tasksToRender.forEach(task => {
             const priority = {1:{bg:'danger',txt:'Alta'}, 2:{bg:'warning',txt:'Média'}, 3:{bg:'success',txt:'Baixa'}}[task.priority] || {bg:'secondary', txt:'Média'};
-            const isOverdue = !task.completed && task.due_date && new Date(task.due_date) < new Date();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const isOverdue = !task.completed && task.due_date && new Date(task.due_date + 'T00:00:00') < today;
             
-            // ATUALIZADO: Mostra botões de admin apenas se for admin E não estiver impersonando
             const adminButtons = isAdminView
                 ? `<button class="btn btn-outline-secondary" title="Editar" data-action="edit" data-id="${task.id}"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" title="Excluir" data-action="delete" data-id="${task.id}"><i class="bi bi-trash"></i></button>`
                 : '';
@@ -751,15 +901,19 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const createdAtStr = task.created_at ? new Date(task.created_at).toLocaleString('pt-BR') : 'N/A';
             
-            // O botão de concluir/reabrir fica desabilitado durante a impersonação?
-            // Decisão: Não, o usuário impersonado (ex: funcionário) deve poder concluir suas próprias tarefas.
-            // Mas se for admin impersonando, ele não deve poder editar/excluir.
+            const unreadCount = task.unread_comment_count || 0;
+            const commentBadge = unreadCount > 0 ? `<span class="notification-badge count">${unreadCount}</span>` : '';
             
             card.innerHTML = `
                 <div class="card h-100 task-card ${task.completed ? 'completed-task' : ''}">
                     <div class="task-actions">
                         ${adminButtons}
-                        <button class="btn btn-outline-info" title="Comentários" data-action="comments" data-id="${task.id}"><i class="bi bi-chat-left-text"></i></button>
+                        
+                        <button class="btn btn-outline-info task-comment-btn" title="Comentários" data-action="comments" data-id="${task.id}">
+                            <i class="bi bi-chat-left-text"></i>
+                            ${commentBadge}
+                        </button>
+                        
                         <button class="${task.completed ? 'btn btn-outline-secondary' : 'btn btn-success'}" title="${task.completed ? 'Reabrir' : 'Concluir'}" data-action="toggle-complete" data-id="${task.id}" data-completed="${completedStr}">
                             <i class="bi ${task.completed ? 'bi-x-lg' : 'bi-check-lg'}"></i>
                         </button>
@@ -770,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="badge bg-${priority.bg}-subtle text-${priority.bg}-emphasis p-2">${priority.txt}</span>
                         </div>
                         <p class="card-text text-muted small">${task.description || ''}</p>
-                        <div class="small text-muted"><b>Prazo:</b> ${task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'N/A'} ${isOverdue ? '<span class="badge bg-danger ms-2">Atrasada</span>' : ''}</div>
+                        <div class="small text-muted"><b>Prazo:</b> ${task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'} ${isOverdue ? '<span class="badge bg-danger ms-2">Atrasada</span>' : ''}</div>
                         <div class="small text-muted mt-1"><b>Para:</b> ${task.assignee_name || 'Ninguém'}</div>
                         <div class="small text-muted mt-3"><b>Criado por:</b> ${task.creator_name || 'N/A'}</div>
                         <div class="small text-muted mt-1"><b>Criado em:</b> ${createdAtStr}</div>
@@ -780,7 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- MODAIS / CHAT / HELPERS (inicialização) ---
+    // --- MODAIS / CHAT (sem alterações) ---
     function initializeModalsAndChat() {
         if (!editTaskModal) {
             const el = document.getElementById('editTaskModal');
@@ -788,13 +942,18 @@ document.addEventListener('DOMContentLoaded', () => {
             editTaskModal = new bootstrap.Modal(el);
             el.querySelector('#edit-task-form').addEventListener('submit', handleEditTask);
         }
-        // NOVO MODAL: Admin User Edit
         if (!adminUserEditModal) {
             const el = document.getElementById('adminUserEditModal');
-            // O conteúdo é populado dinamicamente, mas o modal é inicializado
             adminUserEditModal = new bootstrap.Modal(el);
             el.querySelector('#admin-user-edit-form').addEventListener('submit', handleAdminEditUser);
         }
+
+        if (!quickAddTaskModal) {
+            const el = document.getElementById('quickAddTaskModal');
+            quickAddTaskModal = new bootstrap.Modal(el);
+            el.querySelector('#quick-add-task-form').addEventListener('submit', handleQuickAddTask);
+        }
+
         if (!commentsModal) {
             const el = document.getElementById('commentsModal');
             el.innerHTML = `<div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Comentários</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="comments-list" class="mb-3" style="max-height: 400px; overflow-y: auto;"></div><form id="comment-form"><input type="hidden" id="comment-task-id"><div class="input-group"><input type="text" id="comment-input" class="form-control" placeholder="Adicionar comentário..." required autocomplete="off"><button class="btn btn-outline-primary" type="submit">Enviar</button></div></form></div></div></div>`;
@@ -803,14 +962,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!confirmationModal) {
             const el = document.getElementById('confirmationModal');
-            // Conteúdo já está no HTML, apenas inicializa
             confirmationModal = new bootstrap.Modal(el);
         }
 
         const chat = document.getElementById('chat-container');
         if (!chat.innerHTML.trim()) {
             chat.innerHTML = `
-                <div id="chat-bubble"><i class="bi bi-chat-dots-fill"></i></div>
+                <div id="chat-bubble">
+                    <i class="bi bi-chat-dots-fill"></i>
+                    <span id="chat-notification-badge" class="notification-badge" style="display: none;"></span>
+                </div>
+                
                 <div id="chat-window">
                     <div class="chat-header">Chat da Equipe</div>
                     <div id="chat-messages"></div>
@@ -828,8 +990,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 chatWindow.style.display = isOpen ? 'none' : 'flex';
 
                 if (!isOpen) {
+                    // Se o chat NÃO estava aberto (e agora está),
+                    // carregamos as mensagens e marcamos como lidas.
                     try {
-                        await renderChatMessages();
+                        await renderChatMessages(); // Esta função agora também marca como lido
                     } catch (err) {
                         console.error('Erro ao carregar mensagens do chat:', err);
                     }
@@ -840,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- UTIL: popula dropdown de responsáveis ---
+    // --- UTIL: popula dropdown (sem alterações) ---
     async function populateAssigneeDropdown(selectElement) {
         try {
             const res = await fetch(`${API_URL}/users/employees`);
@@ -862,10 +1026,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- BUSCA E RENDERIZAÇÃO DAS TAREFAS (faz fetch e popula allTasks) ---
+    // --- BUSCA TAREFAS (sem alterações) ---
     async function fetchAndRenderTasks() {
         try {
-            const res = await fetch(`${API_URL}/tasks`);
+            const res = await fetch(`${API_URL}/tasks?user_id=${currentUser.id}`);
             if (!res.ok) throw new Error('Falha ao carregar tarefas');
             allTasks = await res.json();
             renderTasks();
@@ -875,12 +1039,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- CLICK HANDLER GERAL PARA OS BOTOES DENTRO DA LISTA ---
+    // --- CLICK HANDLER TAREFAS (sem alterações) ---
     function handleTaskListClick(e) {
         const button = e.target.closest('button[data-action]');
         if (!button) return;
         
-        // Se estiver impersonando, desabilita ações de admin
         if (currentUser.impersonating && (button.dataset.action === 'edit' || button.dataset.action === 'delete')) {
             alert('Ações de administrador estão desabilitadas durante a impersonação.');
             return;
@@ -888,15 +1051,17 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const action = button.dataset.action;
         const taskId = parseInt(button.dataset.id);
+        
         const actions = {
             'edit': () => handleOpenEditModal(taskId),
             'delete': () => handleDeleteTask(taskId),
-            'comments': () => handleOpenCommentsModal(taskId),
+            'comments': () => handleOpenCommentsModal(taskId, button), // Passa o botão clicado
             'toggle-complete': () => handleToggleComplete(taskId)
         };
         if (actions[action]) actions[action]();
     }
 
+    // --- ADIÇÃO DE TAREFA (sem alterações) ---
     async function handleAddTask(e) {
         e.preventDefault();
         const assigneeId = document.getElementById('assign-to').value;
@@ -905,7 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
             description: document.getElementById('task-description').value,
             priority: parseInt(document.getElementById('task-priority').value),
             due_date: document.getElementById('task-due-date').value || null,
-            creator_id: currentUser.id, // O criador é sempre o usuário logado (o admin)
+            creator_id: currentUser.id, 
             assigned_to_id: assigneeId ? parseInt(assigneeId) : null
         };
         try {
@@ -922,6 +1087,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- FUNÇÕES "ADIÇÃO RÁPIDA" (sem alterações) ---
+    async function handleOpenQuickAddModal() {
+        const form = document.getElementById('quick-add-task-form');
+        form.reset(); 
+        
+        const assignContainer = document.getElementById('quick-assign-container');
+        const isAdmin = (currentUser.role === 'admin' && !currentUser.impersonating);
+
+        if (isAdmin) {
+            await populateAssigneeDropdown(document.getElementById('quick-assign-to'));
+            assignContainer.style.display = 'block';
+        } else {
+            assignContainer.style.display = 'none';
+        }
+
+        quickAddTaskModal.show();
+    }
+
+    async function handleQuickAddTask(e) {
+        e.preventDefault();
+        
+        const isAdmin = (currentUser.role === 'admin' && !currentUser.impersonating);
+        let assigneeId = null;
+        
+        if (isAdmin) {
+            assigneeId = document.getElementById('quick-assign-to').value;
+        } else {
+            assigneeId = currentUser.id;
+        }
+
+        const dueDate = document.getElementById('quick-task-due-date').value;
+
+        const taskData = {
+            title: document.getElementById('quick-task-title').value,
+            description: document.getElementById('quick-task-description').value,
+            priority: parseInt(document.getElementById('quick-task-priority').value),
+            due_date: dueDate || null,
+            creator_id: currentUser.id,
+            assigned_to_id: assigneeId ? parseInt(assigneeId) : null
+        };
+
+        try {
+            const res = await fetch(`${API_URL}/tasks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(taskData)
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Erro ao criar tarefa');
+            
+            quickAddTaskModal.hide();
+            
+            if (document.getElementById('task-list')) {
+                fetchAndRenderTasks();
+            }
+
+        } catch (error) {
+            alert(`Erro: ${error.message}`);
+        }
+    }
+
+    // --- EDIÇÃO DE TAREFA (sem alterações) ---
     async function handleEditTask(e) {
         e.preventDefault();
         const form = e.target;
@@ -933,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', () => {
             priority: parseInt(form.elements['edit-task-priority'].value),
             due_date: form.elements['edit-task-due-date'].value || null,
             assigned_to_id: assigneeId ? parseInt(assigneeId) : null,
-            acting_user_id: currentUser.id // Envia quem está fazendo a ação
+            acting_user_id: currentUser.id
         };
         try {
             const res = await fetch(`${API_URL}/tasks/${taskId}`, {
@@ -949,6 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- TOGGLE COMPLETE (sem alterações) ---
     async function handleToggleComplete(taskId) {
         try {
             let task = allTasks.find(t => t.id === taskId);
@@ -961,8 +1188,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentCompleted = !!task.completed;
             const payload = { 
                 completed: !currentCompleted,
-                // ATUALIZADO: Envia quem está fazendo a ação
-                // Se estiver impersonando, a ação é logada como o usuário impersonado
                 acting_user_id: currentUser.id 
             };
             
@@ -979,14 +1204,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- DELETAR TAREFA (sem alterações) ---
     function handleDeleteTask(taskId) {
         const confirmationText = 'Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.';
         
-        // Reusa o modal de confirmação
         document.getElementById('confirmation-modal-body').textContent = confirmationText;
         const confirmBtn = document.getElementById('confirm-action-btn');
         
-        // Clona para remover listeners antigos
         const newConfirmBtn = confirmBtn.cloneNode(true);
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
 
@@ -995,7 +1219,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch(`${API_URL}/tasks/${taskId}`, { 
                     method: 'DELETE', 
                     headers: { 'Content-Type': 'application/json' },
-                    // ATUALIZADO: Envia quem está fazendo a ação
                     body: JSON.stringify({ acting_user_id: currentUser.id })
                 });
                 let data;
@@ -1006,15 +1229,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 confirmationModal.hide();
                 fetchAndRenderTasks();
-                // alert(data.message || 'Tarefa excluída com sucesso.'); // Opcional
             } catch (err) {
                 alert('Erro ao conectar com o servidor.');
             }
-        }, { once: true }); // Garante que o listener rode só uma vez
+        }, { once: true });
 
         confirmationModal.show();
     }
 
+    // --- ABRIR MODAL DE EDIÇÃO (sem alterações) ---
     async function handleOpenEditModal(taskId) {
         try {
             const res = await fetch(`${API_URL}/tasks/${taskId}`);
@@ -1041,9 +1264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ======================================== ---
-    // --- NOVAS FUNÇÕES (SSAP User Management) ---
-    // --- ======================================== ---
+    // --- FUNÇÕES SSAP (sem alterações) ---
 
     function handleAdminDeleteUser(userId, username) {
         const confirmationText = `Tem certeza que deseja EXCLUIR permanentemente o usuário '${username}'? Esta ação não pode ser desfeita e removerá o usuário do sistema.`;
@@ -1066,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 confirmationModal.hide();
                 alert(data.message || 'Usuário excluído com sucesso.');
-                renderView('ssap'); // Recarrega a view
+                renderView('ssap');
             } catch (err) {
                 alert(err.message);
             }
@@ -1098,9 +1319,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(data.error || 'Não foi possível resetar a senha.');
                 
                 confirmationModal.hide();
-                // MELHORIA LGPD: Não mostra a nova senha no alert, apenas a msg de sucesso.
                 alert(data.message); 
-                renderView('ssap'); // Recarrega a view
+                renderView('ssap');
             } catch (err) {
                 alert(err.message);
             }
@@ -1116,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const user = await res.json();
             
             const form = document.getElementById('admin-user-edit-form');
-            form.dataset.targetUserId = userId; // Armazena o ID do usuário sendo editado
+            form.dataset.targetUserId = userId;
             form.innerHTML = `<div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">Nome de Usuário</label>
@@ -1159,7 +1379,7 @@ document.addEventListener('DOMContentLoaded', () => {
             email: form.elements['admin-edit-email'].value.trim(),
             job_title: form.elements['admin-edit-job-title'].value.trim(),
             role: form.elements['admin-edit-role'].value,
-            acting_user_id: currentUser.id // O admin que está fazendo a ação
+            acting_user_id: currentUser.id
         };
         
         try {
@@ -1172,7 +1392,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error(data.error || 'Erro ao atualizar usuário');
             
             adminUserEditModal.hide();
-            renderView('ssap'); // Recarrega a lista de usuários
+            renderView('ssap');
         } catch (error) {
             errorEl.textContent = error.message;
         }
@@ -1184,10 +1404,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm(confirmationText)) return;
 
         try {
-            // 1. Salva a sessão do admin atual no localStorage
             localStorage.setItem('originalAdminSession', JSON.stringify(currentUser));
             
-            // 2. Solicita um token de impersonação ao backend
             const resToken = await fetch(`${API_URL}/admin/impersonate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1199,7 +1417,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const dataToken = await resToken.json();
             if (!resToken.ok) throw new Error(dataToken.error || 'Falha ao iniciar impersonação');
             
-            // 3. Usa o token para "logar" como o usuário alvo
             const resLogin = await fetch(`${API_URL}/impersonate/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1208,23 +1425,40 @@ document.addEventListener('DOMContentLoaded', () => {
             const dataLogin = await resLogin.json();
             if (!resLogin.ok) throw new Error(dataLogin.error || 'Falha ao logar como usuário');
             
-            // 4. Inicia a nova sessão com os dados do usuário impersonado
             startSession(dataLogin.user);
             
         } catch (error) {
             alert(`Erro na impersonação: ${error.message}`);
-            // Limpa o backup da sessão do admin se a impersonação falhar
             localStorage.removeItem('originalAdminSession');
         }
     }
 
 
-    // --- Handlers de Comentários (Sem alterações) ---
-    async function handleOpenCommentsModal(taskId) {
+    // --- Handlers de Comentários (sem alterações) ---
+    async function handleOpenCommentsModal(taskId, commentButton) {
         document.getElementById('comment-task-id').value = taskId;
-        await renderComments(taskId);
+        
+        if (commentButton) {
+            const badge = commentButton.querySelector('.notification-badge');
+            if (badge) {
+                badge.remove();
+            }
+            
+            try {
+                await fetch(`${API_URL}/tasks/${taskId}/mark-as-read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: currentUser.id })
+                });
+            } catch (err) {
+                console.error("Falha ao marcar tarefa como lida", err);
+            }
+        }
+        
+        await renderComments(taskId); 
         commentsModal.show();
     }
+    
     async function renderComments(taskId) {
         try {
             const res = await fetch(`${API_URL}/tasks/${taskId}/comments`);
@@ -1238,6 +1472,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(error.message);
         }
     }
+    
     async function handleAddComment(e) {
         e.preventDefault();
         const taskId = parseInt(document.getElementById('comment-task-id').value);
@@ -1247,10 +1482,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_URL}/tasks/${taskId}/comments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, text }) // Ação logada como usuário atual (mesmo se impersonado)
+                body: JSON.stringify({ user_id: currentUser.id, text })
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao adicionar comentário');
             document.getElementById('comment-input').value = '';
+            
             await renderComments(taskId);
             await fetchAndRenderTasks();
         } catch (error) {
@@ -1258,7 +1494,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Handlers de Chat (Sem alterações) ---
+    // --- ================================== ---
+    // --- Handlers de Chat (ATUALIZADOS) ---
+    // --- ================================== ---
     async function handleSendChatMessage(e) {
         e.preventDefault();
         const input = document.getElementById('chat-input');
@@ -1268,21 +1506,36 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`${API_URL}/chat/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, text }) // Ação logada como usuário atual
+                body: JSON.stringify({ user_id: currentUser.id, text })
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao enviar mensagem');
             input.value = '';
-            await renderChatMessages();
+            
+            // Ao enviar uma mensagem, renderizamos o chat (que também marca como lido)
+            await renderChatMessages(); 
         } catch (error) {
             alert(`Erro: ${error.message}`);
         }
     }
 
+    /**
+     * (Função ATUALIZADA)
+     * 1. Marca o chat como lido no backend.
+     * 2. Busca e renderiza as mensagens.
+     */
     async function renderChatMessages() {
+        // 1. Marca como lido PRIMEIRO
+        await markChatAsRead();
+        
         try {
-            const res = await fetch(`${API_URL}/chat/messages`);
+            // 2. Busca as mensagens
+            const cacheBuster = `?_=${new Date().getTime()}`;
+            const res = await fetch(`${API_URL}/chat/messages${cacheBuster}`);
+            
             if (!res.ok) throw new Error('Não foi possível carregar mensagens do chat.');
             const messages = await res.json();
+            
+            // 3. Renderiza
             const messagesEl = document.getElementById('chat-messages');
             messagesEl.innerHTML = '';
             messages.forEach(msg => messagesEl.innerHTML += `<div class="p-2"><strong>${msg.username}:</strong> ${msg.text}</div>`);
@@ -1292,4 +1545,367 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // --- Lógica do Banner de Cookies LGPD (sem alterações) ---
+    (function handleCookieConsent() {
+        const banner = document.getElementById('cookie-consent-banner');
+        const acceptBtn = document.getElementById('cookie-consent-btn');
+
+        if (localStorage.getItem('cookie_consent') === 'true') {
+            return;
+        }
+
+        setTimeout(() => {
+            if(banner) banner.classList.add('show');
+        }, 500);
+
+        if(acceptBtn) {
+            acceptBtn.addEventListener('click', () => {
+                if(banner) banner.classList.remove('show');
+                localStorage.setItem('cookie_consent', 'true');
+            });
+        }
+    })();
+    
+
+    // --- FUNÇÕES DPO (sem alterações) ---
+    async function renderDpoView() {
+        mainContent.innerHTML = `
+            <div class="content-header">
+                <h2>Central de Privacidade (DPO)</h2>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <p class="text-muted">Abaixo estão as solicitações de privacidade enviadas pelos usuários.</p>
+                    <div id="dpo-requests-container">
+                        <div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div></div>
+                    </div>
+                </div>
+            </div>`;
+
+        const container = document.getElementById('dpo-requests-container');
+        
+        try {
+            const response = await fetch(`${API_URL}/admin/dpo-requests?admin_user_id=${currentUser.id}`);
+            if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível carregar as solicitações.');
+            
+            const requests = await response.json();
+            
+            if (requests.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted">Nenhuma solicitação de DPO encontrada.</p>';
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            
+            requests.forEach(req => {
+                const createdAt = new Date(req.created_at).toLocaleString('pt-BR');
+                let responseHtml = '';
+                
+                if (req.status === 'answered') {
+                    const respondedAt = new Date(req.responded_at).toLocaleString('pt-BR');
+                    responseHtml = `
+                        <div class="mt-3 p-3 bg-light border rounded">
+                            <h6 class="text-success">Respondido por: ${req.admin_username || 'Admin'} em ${respondedAt}</h6>
+                            <p class="mb-0">${req.response_text}</p>
+                        </div>
+                    `;
+                } else {
+                    responseHtml = `
+                        <form class="dpo-response-form mt-3" data-request-id="${req.id}">
+                            <div class="mb-2">
+                                <label class="form-label fw-bold">Responder à solicitação:</label>
+                                <textarea class="form-control" rows="3" name="response_text" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm">Enviar Resposta</button>
+                        </form>
+                    `;
+                }
+
+                html += `
+                    <div class="list-group-item list-group-item-action flex-column align-items-start mb-3 border">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">${req.request_type}</h5>
+                            <small class="text-muted">${createdAt}</small>
+                        </div>
+                        <p class="mb-1"><strong>De:</strong> ${req.user_username}</p>
+                        <p class="mb-2"><strong>Mensagem:</strong> ${req.message_text}</p>
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="badge bg-${req.status === 'pending' ? 'warning text-dark' : 'success'}">
+                                ${req.status === 'pending' ? 'Pendente' : 'Respondido'}
+                            </span>
+                            <button class="btn btn-outline-danger btn-sm" data-action="delete" data-id="${req.id}" title="Excluir Solicitação">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+
+                        ${responseHtml}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+            
+            container.addEventListener('submit', handleDpoResponseSubmit);
+            container.addEventListener('click', handleDpoViewClick);
+
+
+        } catch (error) {
+            container.innerHTML = `<p class="text-danger text-center">${error.message}</p>`;
+        }
+    }
+
+    function handleDpoViewClick(e) {
+        const deleteButton = e.target.closest('button[data-action="delete"]');
+        
+        if (deleteButton) {
+            e.preventDefault();
+            const requestId = deleteButton.dataset.id;
+            handleAdminDeleteDpoRequest(requestId);
+        }
+    }
+
+
+    async function handleDpoResponseSubmit(e) {
+        if (!e.target.classList.contains('dpo-response-form')) {
+            return;
+        }
+        
+        e.preventDefault();
+        const form = e.target;
+        const requestId = form.dataset.requestId;
+        const responseText = form.elements['response_text'].value;
+        const submitButton = form.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Enviando...';
+
+        try {
+            const response = await fetch(`${API_URL}/admin/dpo-request/${requestId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    admin_user_id: currentUser.id,
+                    response_text: responseText
+                })
+            });
+            
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Erro ao enviar resposta.');
+            
+            renderView('dpo');
+
+        } catch (error) {
+            alert(`Erro: ${error.message}`);
+            submitButton.disabled = false;
+            submitButton.textContent = 'Enviar Resposta';
+        }
+    }
+    
+    async function loadMyDpoRequests() {
+        const container = document.getElementById('my-dpo-requests-list');
+        if (!container) return; 
+
+        try {
+            const response = await fetch(`${API_URL}/user/dpo-requests?user_id=${currentUser.id}`);
+            if (!response.ok) throw new Error('Não foi possível carregar suas solicitações.');
+            
+            const requests = await response.json();
+
+            if (requests.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted small m-0">Você ainda não fez nenhuma solicitação.</p>';
+                return;
+            }
+            
+            let html = '<div class="list-group list-group-flush">';
+            
+            requests.forEach(req => {
+                const createdAt = new Date(req.created_at).toLocaleString('pt-BR');
+                let responseHtml = '';
+                
+                if (req.status === 'answered') {
+                    const respondedAt = new Date(req.responded_at).toLocaleString('pt-BR');
+                    responseHtml = `
+                        <div class="mt-2 p-2 bg-light border rounded" style="font-size: 0.9rem;">
+                            <strong class="text-success">Resposta do DPO (${req.admin_username || 'Admin'} em ${respondedAt}):</strong>
+                            <p class="mb-0 mt-1">${req.response_text}</p>
+                        </div>
+                    `;
+                } else {
+                     responseHtml = `
+                        <div class="mt-2">
+                            <span class="badge bg-warning text-dark">Pendente</span>
+                        </div>
+                     `;
+                }
+                
+                html += `
+                    <div class="list-group-item px-0 py-3">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">${req.request_type}</h6>
+                            <small class="text-muted">${createdAt}</small>
+                        </div>
+                        <p class="mb-1 text-muted small"><strong>Sua Mensagem:</strong> ${req.message_text}</p>
+                        ${responseHtml}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+
+        } catch (error) {
+            container.innerHTML = `<p class="text-danger small">${error.message}</p>`;
+        }
+    }
+
+
+    // --- FUNÇÕES DE ADMIN (sem alterações) ---
+    function handleAdminDeleteDpoRequest(requestId) {
+        const confirmationText = 'Tem certeza que deseja EXCLUIR permanentemente esta solicitação DPO? Esta ação não pode ser desfeita.';
+        
+        document.getElementById('confirmation-modal-body').textContent = confirmationText;
+        const confirmBtn = document.getElementById('confirm-action-btn');
+        
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`${API_URL}/admin/dpo-request/${requestId}`, { 
+                    method: 'DELETE', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Não foi possível excluir a solicitação.');
+                
+                confirmationModal.hide();
+                renderView('dpo');
+                
+            } catch (err) {
+                alert(err.message);
+                confirmationModal.hide();
+            }
+        }, { once: true });
+
+        confirmationModal.show();
+    }
+    
+    function handleAdminPurgeChat() {
+        const confirmationText = 'TEM CERTEZA? Esta ação irá deletar PERMANENTEMENTE todas as mensagens do chat geral para todos os usuários. Esta ação não pode ser desfeita.';
+        
+        document.getElementById('confirmation-modal-body').textContent = confirmationText;
+        const confirmBtn = document.getElementById('confirm-action-btn');
+        
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`${API_URL}/admin/chat/purge`, { 
+                    method: 'DELETE', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Não foi possível limpar o chat.');
+                
+                confirmationModal.hide();
+                alert(data.message || 'Histórico de chat limpo com sucesso.');
+                
+                const chatMessagesEl = document.getElementById('chat-messages');
+                if (chatMessagesEl) {
+                    chatMessagesEl.innerHTML = '';
+                }
+                
+            } catch (err) {
+                alert(err.message);
+                confirmationModal.hide();
+            }
+        }, { once: true });
+
+        confirmationModal.show();
+    }
+
+    // --- ================================== ---
+    // --- FUNÇÕES DE NOTIFICAÇÃO (ATUALIZADAS) ---
+    // --- ================================== ---
+    
+    /**
+     * (Função ATUALIZADA)
+     * Apenas inicia o verificador (poller) e roda ele uma vez.
+     */
+    async function initializeNotificationState() {
+        // Roda a verificação a cada 5 segundos
+        setInterval(pollForNotifications, 5000); 
+        // Roda a verificação uma vez agora mesmo
+        pollForNotifications();
+    }
+
+    /**
+     * (Função ATUALIZADA)
+     * Verifica se há novas mensagens de chat usando a nova rota de "não lidos".
+     */
+    async function pollForNotifications() {
+        if (!currentUser) return; // Não faz nada se o usuário não estiver logado
+
+        try {
+            // --- LÓGICA ATUALIZADA ---
+            // 1. Pergunta ao backend "Ei, eu tenho mensagens não lidas?"
+            const cacheBuster = `?_=${new Date().getTime()}`;
+            const res = await fetch(`${API_URL}/chat/unread-count?user_id=${currentUser.id}${cacheBuster}`);
+            
+            if (!res.ok) {
+                // Se a rota ainda não existe no app.py, vai falhar aqui.
+                // console.warn("A rota /api/chat/unread-count ainda não existe no backend.");
+                return; 
+            }
+            
+            const data = await res.json();
+            
+            // 2. Verifica a resposta
+            if (data.unreadCount > 0) {
+                // 3. Se temos não lidos, verificamos se o chat está FECHADO.
+                const chatWindow = document.getElementById('chat-window');
+                const isChatOpen = window.getComputedStyle(chatWindow).display === 'flex';
+                
+                if (isChatOpen) {
+                    // Se o chat está aberto, atualiza as mensagens (que também marcará como lido)
+                    await renderChatMessages();
+                } else {
+                    // Se o chat está fechado, MOSTRA o ponto.
+                    document.getElementById('chat-notification-badge').style.display = 'block';
+                }
+            } else {
+                // 4. Se temos 0 não lidos, ESCONDE o ponto.
+                 document.getElementById('chat-notification-badge').style.display = 'none';
+            }
+        } catch(e) { 
+            /* Falha silenciosamente */ 
+            // console.error("Falha ao verificar 'unread-count'. O backend (app.py) está atualizado?", e);
+        }
+    }
+    
+    /**
+     * (Função NOVA)
+     * Avisa o backend que lemos o chat.
+     */
+    async function markChatAsRead() {
+        // 1. Esconde o ponto visualmente (ação imediata)
+        document.getElementById('chat-notification-badge').style.display = 'none';
+        
+        // 2. Informa ao backend (em segundo plano)
+        try {
+            await fetch(`${API_URL}/chat/mark-as-read`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: currentUser.id })
+            });
+        } catch (e) {
+            console.error("Falha ao marcar chat como lido.", e);
+        }
+    }
+
+
 });
