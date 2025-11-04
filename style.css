@@ -56,7 +56,7 @@ body.sidebar-collapsed .sidebar-logo { margin-right: 0; height: 50px; width: 50p
 body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 #content-wrapper { margin-left: 260px; }
 
-/* --- NOVO: Banner de Impersonação --- */
+/* --- Banner de Impersonação --- */
 #impersonation-banner {
     background-color: var(--warning-color);
     color: #333;
@@ -80,6 +80,30 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 #sidebar-toggle { font-size: 1.5rem; color: var(--light-text-color); background: transparent; border: none; }
 .header-search-container { width: 350px; }
 .header-search-container .form-control { border-radius: 20px; }
+
+/* Container da Direita no Cabeçalho */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Botão de Adição Rápida */
+#quick-add-task-btn {
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+#quick-add-task-btn i {
+    line-height: 1;
+}
+
 #header-user-info { font-weight: 500; }
 #main-content { padding: 25px; flex-grow: 1; }
 
@@ -100,25 +124,19 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 
 /* --- Seção de Boas-Vindas (Fundo Gradiente) --- */
 .welcome-section { background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; padding: 60px 40px; width: 45%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
-
-/* Estilização da Logo na Tela de Login */
 .logo-img { 
     max-width: 250px; 
     margin-bottom: 1.5rem; 
     filter: drop-shadow(var(--logo-shadow-auth)); 
 }
-
 .welcome-section .content .lead {
     font-size: 1.15rem;
     font-weight: 300;
     opacity: 0.9;
     color: #f8f8f8; 
 }
-
 .form-section { width: 55%; padding: 40px; display: flex; justify-content: center; align-items: center; }
 @media (max-width: 992px) { .welcome-section { display: none; } .form-section { width: 100%; } }
-
-/* Estilização do Título do Formulário */
 .form-box .form-title {
     font-size: 1.8rem;
     font-weight: 600;
@@ -135,37 +153,35 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 .task-card .card-body { padding-right: 50px; }
 .task-actions { 
     position: absolute; 
-    top: 5px; /* Subindo um pouco mais */
+    top: 5px;
     right: -50px; 
     transition: right 0.3s ease; 
     display: flex; 
     flex-direction: column; 
     gap: 5px; 
     padding: 10px; 
-    z-index: 10; /* Garante que os botões fiquem por cima */
+    z-index: 10;
 }
 .card:hover .task-actions { right: 0; }
 .task-actions button {
     pointer-events: auto !important;
     position: relative;
     z-index: 10;
-    width: 38px; /* Mantendo o tamanho redondo */
+    width: 38px;
     height: 38px;
     display: flex;
     justify-content: center;
     align-items: center;
-    border-radius: 50%; /* Fazendo os botões totalmente redondos */
+    border-radius: 50%;
     font-size: 1rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    border: none; /* Removendo borda */
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Sombra leve para profundidade */
+    border: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 .task-actions button i {
     font-size: 1rem;
 }
-
-/* Estilo do botão padrão (Editar/Excluir) */
 .task-actions .btn-outline-secondary {
     background-color: #fff;
     color: var(--light-text-color);
@@ -175,10 +191,8 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     color: white;
     transform: scale(1.05);
 }
-
-/* Estilo do botão de Excluir */
 .task-actions .btn-danger,
-.task-actions .btn-outline-danger { /* Atualizado para pegar os dois */
+.task-actions .btn-outline-danger {
     background-color: #fff;
     color: var(--error-color);
     border-color: var(--error-color);
@@ -189,22 +203,17 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     color: white;
     transform: scale(1.05);
 }
-
-/* Estilo do botão de Concluir/Reabrir (Verde de sucesso) */
 .task-actions .btn-success {
     background-color: var(--success-color);
     color: white;
     border-color: var(--success-color);
 }
 .task-actions .btn-success:hover {
-    background-color: #1e7e34; /* Verde mais escuro no hover */
+    background-color: #1e7e34;
     transform: scale(1.05);
 }
-
-/* Correções para o texto da tarefa concluída */
 .completed-task .card-body { background-color: #f8f9fa; opacity: 0.8; }
 .completed-task h5, .completed-task p { text-decoration: line-through; }
-/* -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
 
 
 /* --- DASHBOARD DE ANÁLISE --- */
@@ -265,7 +274,21 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 
 /* --- CHAT e outros --- */
 #chat-container { position: fixed; bottom: 20px; right: 20px; z-index: 1050; }
-#chat-bubble { position: relative; width: 60px; height: 60px; background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 2rem; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); transition: all 0.3s ease; }
+#chat-bubble { 
+    position: relative; /* Mudado para relative */
+    width: 60px; 
+    height: 60px; 
+    background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); 
+    color: white; 
+    border-radius: 50%; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    font-size: 2rem; 
+    cursor: pointer; 
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); 
+    transition: all 0.3s ease; 
+}
 #chat-bubble:hover { transform: scale(1.1); }
 #chat-window { display: none; position: fixed; bottom: 90px; right: 20px; width: 350px; height: 450px; background: white; border-radius: 15px; box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2); flex-direction: column; overflow: hidden; }
 .chat-header { background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; padding: 15px; font-weight: 600; text-align: center; }
@@ -289,7 +312,7 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     color: var(--primary-color);
 }
 
-/* --- NOVA PÁGINA SSAP (User Management) --- */
+/* --- PÁGINA SSAP (User Management) --- */
 .user-management-table {
     font-size: 0.95rem;
 }
@@ -308,7 +331,7 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     margin: 0 2px;
 }
 .user-management-table .actions-cell {
-    min-width: 220px; /* Garante espaço para os botões */
+    min-width: 220px;
     text-align: right;
 }
 
@@ -317,5 +340,169 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     color: var(--error-color);
     font-size: 0.9rem;
     margin-bottom: 10px;
-    min-height: 1.2em; /* Evita que o layout pule */
+    min-height: 1.2em;
+}
+
+
+/* --- Banner de Cookies LGPD --- */
+.cookie-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #1e293b;
+    color: var(--sidebar-text);
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 2000;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+    transform: translateY(100%);
+    transition: transform 0.5s ease-out;
+}
+.cookie-banner.show {
+    transform: translateY(0);
+}
+.cookie-banner p {
+    margin: 0;
+    font-size: 0.9rem;
+    margin-right: 15px;
+}
+.cookie-banner p a {
+    color: var(--sidebar-text-hover);
+    font-weight: 600;
+    text-decoration: underline;
+}
+.cookie-banner .btn {
+    flex-shrink: 0;
+}
+@media (max-width: 768px) {
+    .cookie-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+}
+
+/* --- Painel Vencendo em Breve (Dashboard) --- */
+.due-soon-panel {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+}
+.due-soon-panel h5 {
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+.due-soon-panel h5 i {
+    color: var(--warning-color); /* Amarelo */
+    margin-right: 8px;
+}
+.due-soon-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin-bottom: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.due-soon-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 5px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.due-soon-list li:last-child {
+    border-bottom: none;
+}
+.due-soon-list .task-title {
+    font-weight: 500;
+}
+.due-soon-list .due-date {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--error-color); /* Vermelho */
+}
+.due-soon-list .due-date-warning {
+    color: var(--warning-color); /* Amarelo */
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+/* --- NOVO: Estilos do Painel "Minhas Estatísticas" --- */
+.stat-item-wrapper {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+}
+.stat-item {
+    text-align: center;
+}
+.stat-item-number {
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    line-height: 1.1;
+}
+.stat-item-label {
+    font-size: 0.9rem;
+    color: var(--light-text-color);
+    font-weight: 500;
+}
+/* Cores específicas para as estatísticas */
+.stat-item-number.success {
+    color: var(--success-color);
+}
+.stat-item-number.pending {
+    color: var(--warning-color);
+}
+.stat-item-number.danger {
+    color: var(--error-color);
+}
+
+
+/* --- ================================== --- */
+/* --- NOVOS ESTILOS: Notificações --- */
+/* --- ================================== --- */
+
+/* Base para todos os emblemas de notificação (pontos ou números) */
+.notification-badge {
+    position: absolute;
+    background-color: var(--error-color);
+    color: white;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* Estilo para o PONTO (ex: chat global) */
+#chat-bubble .notification-badge {
+    width: 14px;
+    height: 14px;
+    top: 5px;
+    right: 5px;
+}
+
+/* Estilo para o NÚMERO (ex: comentários da tarefa) */
+.notification-badge.count {
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 16px; /* Ajusta o número verticalmente */
+    padding: 0 3px;
+    text-align: center;
+    top: -5px;
+    right: -5px;
+}
+
+/* Torna o botão de comentário da tarefa "relative" para ancorar o badge */
+.task-comment-btn {
+    position: relative;
 }
