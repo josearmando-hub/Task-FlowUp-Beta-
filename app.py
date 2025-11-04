@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_mysqldb import MySQL
 import hashlib
-import os
+import os 
 import secrets
 from flask_cors import CORS
 from datetime import date, datetime
@@ -10,33 +10,51 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Configurações do banco de dados MySQL ---
-# MELHORIA DE SEGURANÇA: Em produção, use variáveis de ambiente!
-# Ex: os.environ.get('MYSQL_USER', 'root')
-# MODIFICADO: Agora usa Variáveis de Ambiente (para o Render) ou valores padrão (para rodar local)
-app.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', 'localhost') #
-app.config['MYSQL_USER'] = os.environ.get('MYSQL_USER', 'root') #
-app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'Foda12345') #
-app.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'task_flowup') #
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', 'Foda12345')
+app.config['MYSQL_DB'] = 'task_flowup'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+
+ADMIN_REGISTRATION_KEY = os.environ.get('ADMIN_KEY', 'admin-secret-key')
+
+if app.config['MYSQL_PASSWORD'] == 'Foda12345' or ADMIN_REGISTRATION_KEY == 'admin-secret-key':
+    print("="*50)
+    print("AVISO DE SEGURANÇA: Você está usando senhas/chaves padrão.")
+    print("Em produção, defina as variáveis de ambiente MYSQL_PASSWORD e ADMIN_KEY.")
+    print("="*50)
 
 mysql = MySQL(app)
 
-# --- ARMAZENAMENTO SIMPLES DE TOKEN PARA IMPERSONAÇÃO ---
-# Em produção, use um cache (Redis) ou tabela de banco de dados
 impersonation_tokens = {}
 
 
-# --- Funções de Criptografia ---
+# --- ================================== ---
+# --- Hashing de Senha ---
+# --- ================================== ---
 def create_salt():
     return os.urandom(16).hex()
 
-def hash_password(password, salt):
+def hash_password_legacy(password, salt):
     salted_password = password.encode('utf-8') + salt.encode('utf-8')
     return hashlib.sha256(salted_password).hexdigest()
 
+def hash_password(password, salt_hex):
+    salt_bytes = bytes.fromhex(salt_hex)
+    password_bytes = password.encode('utf-8')
+    
+    dk = hashlib.pbkdf2_hmac(
+        'sha256',
+        password_bytes,
+        salt_bytes,
+        250000 
+    )
+    return dk.hex()
+# --- Fim das Funções de Criptografia ---
+
+
 # --- Funções Auxiliares ---
 def log_activity(user_id, action_text):
-    """Registra uma ação no banco de dados activity_log."""
     if not user_id:
         return
     try:
@@ -50,9 +68,7 @@ def log_activity(user_id, action_text):
     except Exception as e:
         print(f"Erro ao registrar atividade: {e}")
 
-# --- NOVO HELPER: Verificar se é Admin ---
 def is_admin(user_id):
-    """Verifica se o user_id pertence a um admin."""
     if not user_id:
         return False
     try:
@@ -75,16 +91,11 @@ def register():
     username, password, role, email = data.get('username'), data.get('password'), data.get('role'), data.get('email')
     job_title = data.get('job_title') or 'Funcionário' 
     admin_key_received = data.get('adminKey')
-    # MELHORIA LGPD: Captura o consentimento
     consent = data.get('consent') 
-    
-    # MELHORIA DE SEGURANÇA: Use variáveis de ambiente
-    ADMIN_REGISTRATION_KEY = 'admin-secret-key' 
     
     if role == 'admin' and admin_key_received != ADMIN_REGISTRATION_KEY:
         return jsonify({'error': 'Chave de administrador incorreta.'}), 403
     
-    # MELHORIA LGPD: Valida o consentimento
     if not consent:
         return jsonify({'error': 'Você deve aceitar os termos de privacidade para se registrar.'}), 400
         
@@ -132,9 +143,29 @@ def login():
     if not user_row:
         return jsonify({'error': 'Usuário não encontrado.'}), 404
 
-    if hash_password(password, user_row['salt']) != user_row['password_hash']:
+    # --- Migração de Hash ---
+    new_hash_attempt = hash_password(password, user_row['salt'])
+    
+    if new_hash_attempt == user_row['password_hash']:
+        pass
+    
+    elif hash_password_legacy(password, user_row['salt']) == user_row['password_hash']:
+        print(f"ATENÇÃO: Migrando hash de senha para o usuário ID: {user_row['id']}")
+        try:
+            upgrade_cursor = mysql.connection.cursor()
+            upgrade_cursor.execute(
+                "UPDATE users SET password_hash = %s WHERE id = %s",
+                (new_hash_attempt, user_row['id'])
+            )
+            mysql.connection.commit()
+            upgrade_cursor.close()
+        except Exception as e:
+            print(f"ERRO: Falha ao migrar hash da senha para o usuário ID {user_row['id']}: {e}")
+            mysql.connection.rollback()
+    
+    else:
         return jsonify({'error': 'Senha incorreta.'}), 401
-
+    
     user_data = {
         'id': user_row['id'],
         'username': user_row['username'],
@@ -169,13 +200,7 @@ def forgot_password():
         mysql.connection.commit()
         log_activity(user['id'], "solicitou uma redefinição de senha.")
         
-        # MELHORIA LGPD/SEGURANÇA:
-        # A senha NUNCA deve ser retornada na API.
-        # Em um sistema real, ela seria enviada por e-mail.
-        # Aqui, apenas confirmamos o processo.
-        
     cursor.close()
-    # Retorna uma mensagem genérica para evitar enumeração de usuários
     return jsonify({
         'message': 'Se existir uma conta com este e-mail, as instruções de redefinição foram processadas.'
     })
@@ -226,10 +251,13 @@ def change_password():
         cursor.close()
         return jsonify({'error': 'Usuário não encontrado.'}), 404
         
-    if hash_password(old_password, user['salt']) != user['password_hash']:
+    is_new_hash_match = hash_password(old_password, user['salt']) == user['password_hash']
+    is_legacy_hash_match = hash_password_legacy(old_password, user['salt']) == user['password_hash']
+    
+    if not is_new_hash_match and not is_legacy_hash_match:
         cursor.close()
         return jsonify({'error': 'Senha antiga incorreta.'}), 401
-
+    
     new_password_hash = hash_password(new_password, user['salt'])
     cursor.execute(
         "UPDATE users SET password_hash = %s, needs_password_reset = 0 WHERE id = %s",
@@ -243,9 +271,7 @@ def change_password():
     return jsonify({'message': 'Senha atualizada com sucesso.'})
 
 
-# --- ================================== ---
-# --- NOVA ROTA (LGPD - Auto-Exclusão) ---
-# --- ================================== ---
+# --- ROTA LGPD (Auto-Exclusão) ---
 @app.route('/api/user/delete-self', methods=['POST'])
 def delete_self_account():
     data = request.json
@@ -256,7 +282,6 @@ def delete_self_account():
         
     cursor = mysql.connection.cursor()
     try:
-        # Verifica se não é o único admin (regra de negócio importante)
         cursor.execute("SELECT role FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         if user and user['role'] == 'admin':
@@ -266,13 +291,10 @@ def delete_self_account():
                 cursor.close()
                 return jsonify({'error': 'Você não pode excluir sua conta pois é o único administrador. Por favor, promova outro usuário a administrador primeiro.'}), 403
 
-        # LGPD: Direito ao esquecimento implementado como ANONIMIZAÇÃO
-        # Isso preserva a integridade referencial (ex: tarefas criadas)
-        
         anon_username = f"usuario_anonimizado_{user_id}"
         anon_email = f"deleted_{user_id}@taskflow.up"
-        null_salt = create_salt() # Novo salt
-        null_pass = hash_password(secrets.token_hex(32), null_salt) # Senha aleatória e inutilizável
+        null_salt = create_salt() 
+        null_pass = hash_password(secrets.token_hex(32), null_salt)
         
         cursor.execute(
             """UPDATE users 
@@ -286,10 +308,10 @@ def delete_self_account():
             (anon_username, anon_email, null_pass, null_salt, user_id)
         )
         
-        # Limpa dados pessoais de tabelas relacionadas
         cursor.execute("UPDATE task_comments SET text = '[comentário removido pelo usuário]' WHERE user_id = %s", (user_id,))
-        cursor.execute("UPDATE chat_messages SET text = '[mensagem removida pelo usuário]' WHERE user_id = %s", (user_id,))
-        
+        cursor.execute("UPDATE chat_messages SET text = '[mensagem removido pelo usuário]' WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM task_read_timestamps WHERE user_id = %s", (user_id,))
+
         mysql.connection.commit()
         
         log_text = f"teve sua conta anonimizada (auto-exclusão, ID: {user_id})."
@@ -306,7 +328,6 @@ def delete_self_account():
 
 
 # --- Rotas de Usuário ---
-
 @app.route('/api/user/<int:user_id>', methods=['GET'])
 def get_user_details(user_id):
     cursor = mysql.connection.cursor()
@@ -320,20 +341,13 @@ def get_user_details(user_id):
 @app.route('/api/user/<int:user_id>', methods=['PUT'])
 def update_user_profile(user_id):
     data = request.json
-    
-    # --- LÓGICA DE PERMISSÃO ATUALIZADA ---
-    # O usuário que está agindo (pode ser ele mesmo ou um admin)
     acting_user_id = data.get('acting_user_id')
     if not acting_user_id:
         return jsonify({'error': 'ID do usuário atuante é obrigatório.'}), 401
         
-    # Permite a ação se:
-    # 1. O usuário está editando seu próprio perfil
-    # 2. O usuário atuante é um admin
     if acting_user_id != user_id and not is_admin(acting_user_id):
         return jsonify({'error': 'Permissão negada.'}), 403
 
-    # Campos para atualizar
     new_username = data.get('username')
     new_email = data.get('email')
     new_job_title = data.get('job_title') 
@@ -352,7 +366,6 @@ def update_user_profile(user_id):
         cursor.close()
         return jsonify({'error': 'Este e-mail já está em uso.'}), 409
 
-    # Se o usuário atuante for admin, ele TAMBÉM pode mudar o 'role'
     if is_admin(acting_user_id) and 'role' in data:
         new_role = data.get('role')
         if new_role not in ['admin', 'funcionario']:
@@ -362,7 +375,6 @@ def update_user_profile(user_id):
             (new_username, new_email, new_job_title, new_role, user_id)
         )
     else:
-        # Usuário normal ou admin não alterando o role
         cursor.execute(
             "UPDATE users SET username = %s, email = %s, job_title = %s WHERE id = %s", 
             (new_username, new_email, new_job_title, user_id)
@@ -407,7 +419,7 @@ def get_analytics():
         SELECT u.username, COUNT(t.id) as task_count
         FROM tasks t
         JOIN users u ON t.assigned_to_id = u.id
-        WHERE u.role = 'funcionario' -- MODIFICAÇÃO: Apenas funcionários contam como "top"
+        WHERE u.role = 'funcionario'
         GROUP BY u.username
         ORDER BY task_count DESC
         LIMIT 1
@@ -430,15 +442,32 @@ def get_analytics():
 def tasks():
     cursor = mysql.connection.cursor()
     if request.method == 'GET':
+        user_id = request.args.get('user_id')
+        if not user_id:
+            user_id = 0 
+            
         query = """
-            SELECT t.*, u_creator.username AS creator_name, u_assignee.username AS assignee_name, COUNT(tc.id) AS comment_count
+            SELECT 
+                t.*, 
+                u_creator.username AS creator_name, 
+                u_assignee.username AS assignee_name, 
+                COUNT(tc.id) AS comment_count,
+                (
+                    SELECT COUNT(tc_unread.id)
+                    FROM task_comments tc_unread
+                    LEFT JOIN task_read_timestamps trt ON trt.task_id = tc_unread.task_id AND trt.user_id = %s
+                    WHERE tc_unread.task_id = t.id
+                    AND (trt.last_read_at IS NULL OR tc_unread.timestamp > trt.last_read_at)
+                ) AS unread_comment_count
             FROM tasks t
             LEFT JOIN users u_creator ON t.creator_id = u_creator.id
             LEFT JOIN users u_assignee ON t.assigned_to_id = u_assignee.id
             LEFT JOIN task_comments tc ON t.id = tc.task_id
-            GROUP BY t.id ORDER BY t.completed ASC, t.priority ASC, t.due_date ASC
+            GROUP BY t.id 
+            ORDER BY t.completed ASC, t.priority ASC, t.due_date ASC
         """
-        cursor.execute(query)
+        cursor.execute(query, (user_id,)) 
+        
         tasks_list = cursor.fetchall()
         cursor.close()
         for task in tasks_list:
@@ -500,11 +529,45 @@ def manage_task(task_id):
         data = request.json if request.is_json else {}
         acting_user_id = data.get('acting_user_id')
         
+        try:
+            cursor.execute("DELETE FROM task_read_timestamps WHERE task_id = %s", (task_id,))
+        except Exception as e:
+            print(f"Aviso: falha ao limpar 'task_read_timestamps' para tarefa {task_id}: {e}")
+
         cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
         mysql.connection.commit()
         cursor.close()
         log_activity(acting_user_id, f"excluiu a tarefa ID {task_id}.")
         return jsonify({'message': f'Tarefa {task_id} deletada.'})
+
+
+# --- ENDPOINT: Marcar Tarefa como Lida ---
+@app.route('/api/tasks/<int:task_id>/mark-as-read', methods=['POST'])
+def mark_task_as_read(task_id):
+    user_id = request.json.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'User ID é obrigatório.'}), 400
+    
+    cursor = mysql.connection.cursor()
+    now = datetime.now()
+    
+    try:
+        cursor.execute(
+            """
+            INSERT INTO task_read_timestamps (user_id, task_id, last_read_at)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE last_read_at = %s
+            """,
+            (user_id, task_id, now, now)
+        )
+        mysql.connection.commit()
+        cursor.close()
+        return jsonify({'message': 'Tarefa marcada como lida.'}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        cursor.close()
+        print(f"Erro ao marcar tarefa como lida: {e}")
+        return jsonify({'error': 'Erro ao marcar tarefa como lida.'}), 500
 
 
 # --- Rotas de Comentários ---
@@ -544,10 +607,103 @@ def chat_messages():
     
     if request.method == 'POST':
         data = request.json
-        cursor.execute("INSERT INTO chat_messages (user_id, text) VALUES (%s, %s)", (data.get('user_id'), data.get('text')))
+        user_id = data.get('user_id')
+        cursor.execute("INSERT INTO chat_messages (user_id, text) VALUES (%s, %s)", (user_id, data.get('text')))
         mysql.connection.commit()
+        
+        # --- ATUALIZAÇÃO "NÃO LIDOS" ---
+        # Ao enviar uma mensagem, o usuário automaticamente "lê" o chat
+        try:
+            cursor.execute("UPDATE users SET chat_last_read_at = NOW() WHERE id = %s", (user_id,))
+            mysql.connection.commit()
+        except Exception as e:
+            print(f"Erro ao atualizar chat_last_read_at ao enviar mensagem: {e}")
+            mysql.connection.rollback()
+            
         cursor.close()
         return jsonify({'message': 'Mensagem enviada.'}), 201
+
+
+# --- ============================================ ---
+# --- NOVAS ROTAS DE NOTIFICAÇÃO DO CHAT GLOBAL ---
+# --- ============================================ ---
+
+@app.route('/api/chat/unread-count', methods=['GET'])
+def get_chat_unread_count():
+    """Verifica quantas mensagens de chat são 'não lidas' para um usuário."""
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'User ID é obrigatório.'}), 400
+
+    cursor = mysql.connection.cursor()
+    try:
+        # 1. Pega a última vez que o usuário leu o chat
+        cursor.execute("SELECT chat_last_read_at FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        
+        # Se o usuário não existir ou for a primeira vez, usa a data atual
+        last_read = user['chat_last_read_at'] if (user and user['chat_last_read_at']) else datetime.now()
+
+        # 2. Conta quantas mensagens no chat são MAIS NOVAS que a data de leitura
+        cursor.execute(
+            """SELECT COUNT(id) as unreadCount 
+               FROM chat_messages 
+               WHERE timestamp > %s""",
+            (last_read,)
+        )
+        result = cursor.fetchone()
+        cursor.close()
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        cursor.close()
+        print(f"Erro ao buscar contagem de não lidos: {e}")
+        return jsonify({'error': 'Erro ao buscar contagem de não lidos.'}), 500
+
+
+@app.route('/api/chat/mark-as-read', methods=['POST'])
+def mark_chat_as_read():
+    """Atualiza o 'chat_last_read_at' do usuário para agora."""
+    user_id = request.json.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'User ID é obrigatório.'}), 400
+
+    cursor = mysql.connection.cursor()
+    try:
+        cursor.execute("UPDATE users SET chat_last_read_at = NOW() WHERE id = %s", (user_id,))
+        mysql.connection.commit()
+        cursor.close()
+        return jsonify({'message': 'Chat marcado como lido.'}), 200
+    except Exception as e:
+        mysql.connection.rollback()
+        cursor.close()
+        print(f"Erro ao marcar chat como lido: {e}")
+        return jsonify({'error': 'Erro ao marcar chat como lido.'}), 500
+
+
+# --- ROTA DE ADMIN (PURGE CHAT) ---
+@app.route('/api/admin/chat/purge', methods=['DELETE'])
+def admin_purge_chat():
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("TRUNCATE TABLE chat_messages")
+        mysql.connection.commit()
+        cursor.close()
+        
+        log_activity(admin_id, "executou a limpeza (PURGE) de todas as mensagens do chat.")
+        return jsonify({'message': 'Histórico de chat limpo com sucesso.'}), 200
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        print(f"Erro ao limpar o chat: {e}")
+        return jsonify({'error': 'Erro ao limpar o chat.'}), 500
 
 
 # --- ROTA DE LOG DE ATIVIDADES ---
@@ -574,14 +730,9 @@ def get_activity_log():
     return jsonify(logs)
 
 
-# --- ============================================ ---
-# --- NOVAS ROTAS SSAP (Admin User Management) ---
-# --- ============================================ ---
-
+# --- ROTAS SSAP (Admin User Management) ---
 @app.route('/api/admin/users', methods=['GET'])
 def admin_get_all_users():
-    # A verificação de admin é feita no frontend ANTES de mostrar o link,
-    # mas adicionamos uma verificação de segurança no backend.
     admin_id = request.args.get('admin_user_id')
     if not is_admin(admin_id):
         return jsonify({'error': 'Acesso negado. Requer privilégios de administrador.'}), 403
@@ -610,21 +761,14 @@ def admin_delete_user(user_id):
             cursor.close()
             return jsonify({'error': 'Usuário não encontrado.'}), 404
 
-        # Implementa a deleção em cascata manualmente para evitar falhas de FK
-        # (Idealmente, o DB teria 'ON DELETE SET NULL' ou 'ON DELETE CASCADE')
-        
-        # Anonimiza tarefas criadas por ele (setar creator_id para NULL)
+        # Limpa os dados de leitura do usuário deletado
+        cursor.execute("DELETE FROM task_read_timestamps WHERE user_id = %s", (user_id,))
+
         cursor.execute("UPDATE tasks SET creator_id = NULL WHERE creator_id = %s", (user_id,))
-        # Remover atribuições de tarefas
         cursor.execute("UPDATE tasks SET assigned_to_id = NULL WHERE assigned_to_id = %s", (user_id,))
-        # Deletar seus comentários
         cursor.execute("DELETE FROM task_comments WHERE user_id = %s", (user_id,))
-        # Deletar suas mensagens no chat
         cursor.execute("DELETE FROM chat_messages WHERE user_id = %s", (user_id,))
-        # Deletar seus logs de atividade
         cursor.execute("DELETE FROM activity_log WHERE user_id = %s", (user_id,))
-        
-        # 2. Deletar o usuário
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         
         mysql.connection.commit()
@@ -667,14 +811,153 @@ def admin_force_reset_password():
     
     log_activity(admin_id, f"forçou a redefinição de senha para o usuário {user['username']} (ID: {target_user_id}).")
     
-    # MELHORIA LGPD/SEGURANÇA: Não retorne a senha temporária para o admin.
-    # O usuário será forçado a redefinir no próximo login.
     return jsonify({
         'message': f"Redefinição de senha forçada para {user['username']}. O usuário deverá criar uma nova senha no próximo login."
     })
 
-# --- ROTAS DE IMPERSONAÇÃO (SSO) ---
 
+# --- ROTAS DA CENTRAL DE PRIVACIDADE (DPO) ---
+@app.route('/api/dpo-request', methods=['POST'])
+def submit_dpo_request():
+    data = request.json
+    user_id = data.get('acting_user_id')
+    request_type = data.get('request_type')
+    message = data.get('message_text')
+    
+    if not all([user_id, request_type, message]):
+        return jsonify({'error': 'Dados incompletos.'}), 400
+        
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute(
+            """INSERT INTO dpo_requests (user_id, request_type, message_text, status, created_at) 
+               VALUES (%s, %s, %s, 'pending', NOW())""",
+            (user_id, request_type, message)
+        )
+        mysql.connection.commit()
+        cursor.close()
+        
+        log_activity(user_id, f"enviou uma solicitação de DPO do tipo '{request_type}'.")
+        return jsonify({'message': 'Sua solicitação foi enviada ao DPO com sucesso.'}), 201
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        print(f"Erro ao salvar solicitação DPO: {e}")
+        return jsonify({'error': 'Erro ao processar sua solicitação.'}), 500
+
+@app.route('/api/admin/dpo-requests', methods=['GET'])
+def get_dpo_requests():
+    admin_id = request.args.get('admin_user_id')
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT r.id, r.request_type, r.message_text, r.status, r.created_at, r.response_text, r.responded_at,
+               u.username AS user_username, a.username AS admin_username
+        FROM dpo_requests r
+        JOIN users u ON r.user_id = u.id
+        LEFT JOIN users a ON r.responded_by_id = a.id
+        ORDER BY r.status ASC, r.created_at DESC
+    """
+    cursor.execute(query)
+    requests_list = cursor.fetchall()
+    cursor.close()
+    
+    for req in requests_list:
+        if isinstance(req.get('created_at'), datetime): req['created_at'] = req['created_at'].isoformat()
+        if isinstance(req.get('responded_at'), datetime): req['responded_at'] = req['responded_at'].isoformat()
+            
+    return jsonify(requests_list)
+
+@app.route('/api/admin/dpo-request/<int:req_id>', methods=['PUT'])
+def respond_dpo_request(req_id):
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    response_text = data.get('response_text')
+    
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+    if not response_text:
+        return jsonify({'error': 'O texto de resposta é obrigatório.'}), 400
+        
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute(
+            """UPDATE dpo_requests 
+               SET status = 'answered', 
+                   response_text = %s, 
+                   responded_by_id = %s, 
+                   responded_at = NOW()
+               WHERE id = %s""",
+            (response_text, admin_id, req_id)
+        )
+        mysql.connection.commit()
+        cursor.close()
+        
+        log_activity(admin_id, f"respondeu à solicitação DPO ID {req_id}.")
+        return jsonify({'message': 'Resposta enviada com sucesso.'}), 200
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        print(f"Erro ao responder solicitação DPO: {e}")
+        return jsonify({'error': 'Erro ao salvar resposta.'}), 500
+
+
+@app.route('/api/admin/dpo-request/<int:req_id>', methods=['DELETE'])
+def admin_delete_dpo_request(req_id):
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("DELETE FROM dpo_requests WHERE id = %s", (req_id,))
+        mysql.connection.commit()
+        
+        if cursor.rowcount == 0:
+            cursor.close()
+            return jsonify({'error': 'Solicitação não encontrada.'}), 404
+            
+        cursor.close()
+        log_activity(admin_id, f"deletou a solicitação DPO ID {req_id}.")
+        return jsonify({'message': 'Solicitação DPO deletada com sucesso.'}), 200
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        print(f"Erro ao deletar solicitação DPO: {e}")
+        return jsonify({'error': 'Erro ao deletar solicitação.'}), 500
+
+
+@app.route('/api/user/dpo-requests', methods=['GET'])
+def get_user_dpo_requests():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'ID de usuário é obrigatório.'}), 400
+    
+    cursor = mysql.connection.cursor()
+    query = """
+        SELECT r.id, r.request_type, r.message_text, r.status, r.created_at, 
+               r.response_text, r.responded_at, a.username AS admin_username
+        FROM dpo_requests r
+        LEFT JOIN users a ON r.responded_by_id = a.id
+        WHERE r.user_id = %s
+        ORDER BY r.created_at DESC
+    """
+    cursor.execute(query, (user_id,))
+    requests_list = cursor.fetchall()
+    cursor.close()
+    
+    for req in requests_list:
+        if isinstance(req.get('created_at'), datetime): req['created_at'] = req['created_at'].isoformat()
+        if isinstance(req.get('responded_at'), datetime): req['responded_at'] = req['responded_at'].isoformat()
+            
+    return jsonify(requests_list)
+
+
+# --- ROTAS DE IMPERSONAÇÃO (SSO) ---
 @app.route('/api/admin/impersonate', methods=['POST'])
 def admin_impersonate_start():
     data = request.json
@@ -686,13 +969,11 @@ def admin_impersonate_start():
     if admin_id == target_user_id:
         return jsonify({'error': 'Você não pode impersonar a si mesmo.'}), 400
 
-    # Gera um token de uso único
     token = secrets.token_hex(32)
-    # Armazena o token com o ID do admin e o ID do alvo
     impersonation_tokens[token] = {
         'admin_id': admin_id,
         'target_user_id': target_user_id,
-        'expires_at': datetime.now().timestamp() + 60 # Token expira em 60 seg
+        'expires_at': datetime.now().timestamp() + 60
     }
     
     log_activity(admin_id, f"iniciou uma sessão de impersonação para o usuário ID {target_user_id}.")
@@ -706,9 +987,8 @@ def impersonate_login():
     if not token or token not in impersonation_tokens:
         return jsonify({'error': 'Token de impersonação inválido ou expirado.'}), 403
         
-    token_data = impersonation_tokens.pop(token) # Remove o token (uso único)
+    token_data = impersonation_tokens.pop(token) 
     
-    # Verifica expiração
     if datetime.now().timestamp() > token_data['expires_at']:
         return jsonify({'error': 'Token de impersonação expirado.'}), 403
 
@@ -723,15 +1003,13 @@ def impersonate_login():
     if not user_row:
         return jsonify({'error': 'Usuário alvo não encontrado.'}), 404
 
-    # Monta o objeto de sessão do usuário alvo
     user_data = {
         'id': user_row['id'],
         'username': user_row['username'],
         'email': user_row['email'],
         'role': user_row['role'],
         'jobTitle': user_row['job_title'],
-        'needsPasswordReset': False, # Assume que não precisa
-        # --- ADICIONA FLAGS DE IMPERSONAÇÃO ---
+        'needsPasswordReset': False,
         'impersonating': True,
         'original_admin_id': admin_id
     }
@@ -740,4 +1018,5 @@ def impersonate_login():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    is_debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(debug=is_debug, port=5001)
