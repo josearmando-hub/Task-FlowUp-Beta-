@@ -19,7 +19,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
           </div>
           <div class="modal-body">
-            <p><strong>Última atualização:</strong> [Data da Atualização]</p>
+            <p><strong>Última atualização:</strong> 30 de Outubro de 2025</p>
             <p>Bem-vindo ao Task FlowUp. Ao se registrar e usar nossa plataforma, você concorda com estes Termos de Uso e nossa Política de Privacidade.</p>
             
             <p class="text-danger small"><strong>AVISO:</strong> Este é um texto de exemplo gerado com base nas funcionalidades do sistema e na LGPD. Ele NÃO substitui a consultoria jurídica. Recomenda-se que um profissional revise este documento.</p>
@@ -95,6 +95,7 @@
                         <li>Isso é feito para manter a integridade dos projetos (as tarefas criadas por você permanecerão, mas atribuídas ao usuário anônimo).</li>
                     </ul>
                 </li>
+                <li><strong>Direito de Petição (Fale com o DPO):</strong> Você pode enviar solicitações formais, perguntas ou reclamações sobre o uso dos seus dados pessoais diretamente ao nosso Encarregado de Proteção de Dados (DPO) através da "Central de Privacidade" em seu perfil.</li>
             </ul>
             
             <h5>9. Compartilhamento e Segurança</h5>
@@ -233,6 +234,9 @@
                 <li data-view="team"><a href="#"><i class="bi bi-people-fill"></i><span>Equipe</span></a></li>
                 <li id="nav-activity-log" data-view="log" style="display: none;"><a href="#"><i class="bi bi-clock-history"></i><span>Log de Atividades</span></a></li>
                 <li id="nav-ssap" data-view="ssap" style="display: none;"><a href="#"><i class="bi bi-person-vcard-fill"></i><span>SSAP (Usuários)</span></a></li>
+                
+                <li id="nav-dpo" data-view="dpo" style="display: none;"><a href="#"><i class="bi bi-shield-check"></i><span>Central DPO</span></a></li>
+                
                 <li data-view="profile"><a href="#"><i class="bi bi-person-circle"></i><span>Meu Perfil</span></a></li>
             </ul>
             <ul class="list-unstyled logout-section">
@@ -252,8 +256,13 @@
                     <button type="button" id="sidebar-toggle" class="btn"><i class="bi bi-list"></i></button>
                     <div id="header-search-container" class="header-search-container"></div>
                 </div>
-                <div id="header-user-info" class="ms-auto" style="cursor: pointer;" title="Ir para Meu Perfil">
-                    Olá, <strong id="header-username">Usuário</strong>!
+                <div class="header-right">
+                    <button type="button" id="quick-add-task-btn" class="btn btn-primary" title="Adicionar Nova Tarefa">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                    <div id="header-user-info" class="ms-auto" style="cursor: pointer;" title="Ir para Meu Perfil">
+                        Olá, <strong id="header-username">Usuário</strong>!
+                    </div>
                 </div>
             </header>
             <main id="main-content" class="container-fluid"></main>
@@ -328,8 +337,64 @@
         </div>
     </div>
 
+    <div class="modal fade" id="quickAddTaskModal" tabindex="-1" aria-labelledby="quickAddTaskModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="quickAddTaskModalLabel">Adicionar Nova Tarefa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="quick-add-task-form">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="quick-task-title" class="form-label">Título</label>
+                                <input type="text" id="quick-task-title" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="quick-task-priority" class="form-label">Prioridade</label>
+                                <select id="quick-task-priority" class="form-select">
+                                    <option value="3">Baixa</option>
+                                    <option value="2" selected>Média</option>
+                                    <option value="1">Alta</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="quick-task-due-date" class="form-label">Prazo (Opcional)</label>
+                                <input type="date" id="quick-task-due-date" class="form-control">
+                            </div>
+                            <div class="col-12">
+                                <label for="quick-task-description" class="form-label">Descrição (Opcional)</label>
+                                <textarea id="quick-task-description" class="form-control" rows="3"></textarea>
+                            </div>
+                            <div class="col-12" id="quick-assign-container" style="display: none;">
+                                <label for="quick-assign-to" class="form-label">Atribuir para:</label>
+                                <select id="quick-assign-to" class="form-select">
+                                    <option value="">Ninguém</option>
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="quick-add-task-form" class="btn btn-primary">Salvar Tarefa</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="script.js"></script>
+
+    <div id="cookie-consent-banner" class="cookie-banner">
+        <p>
+            Este site utiliza cookies e armazenamento local para garantir o funcionamento essencial (como sua sessão de login) e para fins de análise, se aplicável. Ao continuar a usar este site, você concorda com nosso uso. Para mais detalhes, consulte nossa 
+            <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Política de Privacidade</a>.
+        </p>
+        <button id="cookie-consent-btn" class="btn btn-primary btn-sm">Entendido</button>
+    </div>
+
 </body>
 </html>
