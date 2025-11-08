@@ -506,3 +506,82 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 .task-comment-btn {
     position: relative;
 }
+
+/* --- ========================================== --- */
+/* --- ATUALIZAÇÃO: Badge DPO na Sidebar (CORRIGIDO) --- */
+/* --- ========================================== --- */
+
+/* Ajusta o badge numérico para a barra lateral */
+#dpo-notification-badge {
+    font-size: 0.7rem;
+    padding: 0.2em 0.5em;
+    font-weight: 600;
+    height: 18px;
+    min-width: 18px;
+    line-height: 1;
+    
+    /* --- INÍCIO DA CORREÇÃO --- */
+    /* O badge deve estar escondido por padrão */
+    display: none; 
+    /* O script (script.js) irá mudar para 'flex' quando houver notificações */
+    /* --- FIM DA CORREÇÃO --- */
+    
+    align-items: center;
+    justify-content: center;
+    
+    /* Remove o posicionamento absoluto */
+    position: relative; 
+    
+    /* Remove a borda branca para ficar mais limpo na sidebar */
+    border: none;
+    
+    /* Ajusta a margem para ficar alinhado */
+    margin-left: auto;
+    margin-right: 5px;
+}
+
+/* Esconde o badge DPO quando a sidebar está recolhida */
+body.sidebar-collapsed #dpo-notification-badge {
+    display: none;
+}
+
+
+/* --- ========================================== --- */
+/* --- ATUALIZAÇÃO: Log de Atividades do Usuário  --- */
+/* --- =l======================================== --- */
+
+/* Container para o log do usuário no perfil */
+#user-activity-log-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.user-activity-log-table {
+    margin-bottom: 0; /* Remove a margem padrão da tabela */
+}
+
+.user-activity-log-table th {
+    font-weight: 600;
+    background-color: #f8f9fa;
+    position: sticky; /* Cabeçalho fixo */
+    top: 0;
+}
+
+.user-activity-log-table td {
+    vertical-align: middle;
+}
+
+.user-activity-log-table td:first-child {
+    /* Texto da ação */
+    color: #333;
+}
+
+.user-activity-log-table td:last-child {
+    /* Data */
+    color: var(--light-text-color);
+    font-size: 0.85rem;
+    white-space: nowrap; /* Não quebra a data */
+}
