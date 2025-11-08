@@ -4,8 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUser = null;
     let allTasks = []; // Armazena todas as tarefas para reuso
     let currentFilter = 'all';
+    let currentCategoryFilter = 'all'; // --- NOVO --- Rastreia o filtro de categoria
     let editTaskModal, commentsModal, confirmationModal, forceResetModal, adminUserEditModal;
     let quickAddTaskModal; 
+    let assignCategoriesModal; // --- NOVO --- Modal de Associação
 
     // --- SELETORES DO DOM ---
     const authContainer = document.querySelector('.auth-container');
@@ -146,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     } catch(e) { /* ok if modal not present */ }
 
-    // --- SESSÃO ---
+    // --- SESSÃO (CORRIGIDA) ---
     function startSession(user) {
         currentUser = user;
         authContainer.style.display = 'none';
@@ -169,19 +171,30 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('nav-activity-log').style.display = 'none';
             document.getElementById('nav-ssap').style.display = 'none';
             document.getElementById('nav-dpo').style.display = 'none';
+            if (document.getElementById('nav-categories')) { 
+                document.getElementById('nav-categories').style.display = 'none'; 
+            } 
         } else {
             impersonationBanner.style.display = 'none';
             navLogout.innerHTML = `<a href="#"><i class="bi bi-box-arrow-left"></i><span>Sair</span></a>`;
             document.getElementById('nav-activity-log').style.display = isAdmin ? 'list-item' : 'none';
             document.getElementById('nav-ssap').style.display = isAdmin ? 'list-item' : 'none';
             document.getElementById('nav-dpo').style.display = isAdmin ? 'list-item' : 'none';
+            if (document.getElementById('nav-categories')) { 
+                document.getElementById('nav-categories').style.display = isAdmin ? 'list-item' : 'none'; 
+            } 
         }
         
         setupEventListeners();
         renderView('dashboard');
         
-        // --- Inicia o sistema de notificação ---
-        initializeNotificationState();
+        // --- INÍCIO DA CORREÇÃO ---
+        // Inicia o sistema de notificação (AGORA SÓ PARA O CHAT)
+        initializeNotificationState(); 
+        
+        // Atualiza o badge DPO uma vez no login (lógica "igual a das tarefas")
+        updateDpoBadge();
+        // --- FIM DA CORREÇÃO ---
     }
     
     function logout() {
@@ -266,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- RENDERIZAÇÃO DE VIEWS ---
+    // --- RENDERIZAÇÃO DE VIEWS (CORRIGIDA) ---
     function renderView(viewName) {
         document.querySelector('#sidebar .components li.active')?.classList.remove('active');
         document.querySelector(`#sidebar .components li[data-view="${viewName}"]`)?.classList.add('active');
@@ -274,18 +287,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchContainer = document.getElementById('header-search-container');
         searchContainer.style.display = (viewName === 'dashboard') ? 'block' : 'none';
 
+        // --- INÍCIO DA CORREÇÃO ---
+        // Esta lógica foi alterada
+        if (viewName === 'dpo') {
+            // Se o usuário CLICAR na aba DPO, escondemos o badge
+            const dpoBadge = document.getElementById('dpo-notification-badge');
+            if(dpoBadge) dpoBadge.style.display = 'none';
+        } else {
+            // Se o usuário clicou em QUALQUER OUTRA aba (ex: Dashboard, Perfil),
+            // re-verificamos o status do badge DPO (como nas tarefas).
+            updateDpoBadge();
+        }
+        // --- FIM DA CORREÇÃO ---
+
+
         if (viewName === 'dashboard') renderDashboardView();
         else if (viewName === 'analytics') renderAnalyticsView();
         else if (viewName === 'profile') renderProfileView();
-        // --- RESTAURADO ---
         else if (viewName === 'team') renderTeamView();
-        // --- ---
         else if (viewName === 'log') renderActivityLogView();
         else if (viewName === 'ssap') renderSSAPView(); 
+        else if (viewName === 'categories') renderCategoryManagementView(); 
         else if (viewName === 'dpo') renderDpoView();
     }
 
-    // --- PROFILE VIEW (sem alterações) ---
+    // --- PROFILE VIEW ---
     async function renderProfileView() {
         mainContent.innerHTML = `
             <div class="content-header"><h2>Meu Perfil</h2></div>
@@ -369,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <option value="">Selecione...</option>
                                         <option value="access">Solicitar cópia dos meus dados</option>
                                         <option value="correction">Solicitar correção de dados</option>
-                                        <option value="anonymization">Solicitar anonimização (exclusão)</option>
+                                        <option value="anonymization">Solicitar exclusão</option>
                                         <option value="question">Dúvida geral sobre privacidade</option>
                                     </select>
                                 </div>
@@ -390,17 +416,29 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                     </div>
-                </div>
+
+                    ${currentUser.role === 'funcionario' ? `
+                    <div class="card mt-4">
+                        <div class="card-header"><h5 class="mb-0">Meu Histórico de Conclusões</h5></div>
+                        <div class="card-body">
+                            <p class="text-muted small">Suas 100 últimas tarefas concluídas.</p>
+                            <div id="user-activity-log-container">
+                                <div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    </div>
 
                 <div class="col-12 mt-4">
                     <div class="card border-danger">
                         <div class="card-header bg-danger text-white"><h5 class="mb-0">Zona de Perigo</h5></div>
                         <div class="card-body">
-                            <p class="text-muted">Esta ação (anonimização) também pode ser solicitada formalmente ao DPO. Se você fizer por conta própria, a ação é imediata e não pode ser desfeita.</p>
+                            <p class="text-muted">Esta ação (exclusão) iniciará uma solicitação formal ao DPO. Sua conta será agendada para exclusão em 7 dias. Esta ação, após executada pelo DPO, não pode ser desfeita.</p>
                             <button id="delete-account-btn" class="btn btn-danger" ${currentUser.impersonating ? 'disabled' : ''}>
-                                Anonimizar Minha Conta Agora
+                                Solicitar Exclusão da Minha Conta
                             </button>
-                            ${currentUser.impersonating ? '<p class="text-danger small mt-2">Ações de exclusão estão desabilitadas durante a impersonação.</p>' : ''}
+                            ${currentUser.impersonating ? '<p class="text-danger small mt-2">Ações de exclusão estão desabilitadas during a impersonação.</p>' : ''}
                         </div>
                     </div>
                 </div>
@@ -501,18 +539,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        // Listener do botão de exclusão (agora solicitação)
         document.getElementById('delete-account-btn').addEventListener('click', handleDeleteSelfAccount);
 
         loadMyDpoRequests();
+        
+        // Carrega o log de conclusões (Apenas para 'funcionario')
+        if (currentUser.role === 'funcionario') {
+            loadMyActivityLog();
+        }
     }
     
-    // --- FUNÇÃO DPO (sem alterações) ---
+    // --- CORREÇÃO DE BUG (res is not defined) ---
     async function handleDpoRequest(e) {
         e.preventDefault();
         const requestType = document.getElementById('dpo-request-type').value;
         const message = document.getElementById('dpo-request-message').value;
         try {
-            const response = await fetch(`${API_URL}/dpo-request`, {
+            const response = await fetch(`${API_URL}/dpo-request`, { // Corrigido: 'response'
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -521,12 +565,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     message_text: message
                 })
             });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Erro ao enviar solicitação.');
+            const data = await response.json(); // Corrigido: 'response'
+            if (!response.ok) throw new Error(data.error || 'Erro ao enviar solicitação.'); // Corrigido: 'response.ok'
             
             alert(data.message); 
             e.target.reset();
-            loadMyDpoRequests();
+            loadMyDpoRequests(); // Recarrega a lista para mostrar a nova solicitação
 
         } catch (error) {
             alert(`Erro: ${error.message}`);
@@ -534,11 +578,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- FUNÇÃO LGPD (sem alterações) ---
+    // --- ================================== ---
+    // --- ATUALIZAÇÃO LGPD/TEXTO: Lógica de Exclusão de Conta (Solicitação)
+    // --- ================================== ---
     function handleDeleteSelfAccount(e) {
         if (currentUser.impersonating) return;
 
-        const confirmationText = 'Tem certeza que deseja EXCLUIR sua conta? Esta ação é permanente e irá anonimizar todos os seus dados pessoais (nome, e-mail) e limpar seus comentários e mensagens de chat.';
+        // ATUALIZAÇÃO DE TEXTO
+        const confirmationText = 'Você confirma a SOLICITAÇÃO de exclusão da sua conta? Esta ação é permanente e será agendada para 7 dias.';
         
         document.getElementById('confirmation-modal-body').textContent = confirmationText;
         const confirmBtn = document.getElementById('confirm-action-btn');
@@ -548,6 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         newConfirmBtn.addEventListener('click', async () => {
             try {
+                // A rota é a mesma, mas o backend foi alterado para tratar como uma solicitação
                 const res = await fetch(`${API_URL}/user/delete-self`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' },
@@ -555,15 +603,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Não foi possível excluir a conta.');
+                if (!res.ok) throw new Error(data.error || 'Não foi possível solicitar a exclusão.');
                 
                 confirmationModal.hide();
-                alert(data.message || 'Conta excluída/anonimizada com sucesso.');
+                // ATUALIZAÇÃO DE TEXTO
+                alert(data.message || 'Solicitação de exclusão registrada com sucesso.');
                 
-                performFullLogout(); 
+                // NÃO faz logout, apenas atualiza a lista de solicitações DPO
+                loadMyDpoRequests(); 
                 
             } catch (err) {
                 alert(err.message);
+                confirmationModal.hide();
             }
         }, { once: true });
 
@@ -571,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- DASHBOARD (sem alterações) ---
+    // --- DASHBOARD (MODIFICADO) ---
     async function renderDashboardView() {
         const searchContainer = document.getElementById('header-search-container');
         searchContainer.innerHTML = `<input type="search" id="task-search-input" class="form-control" placeholder="🔍 Buscar tarefas...">`;
@@ -579,13 +630,24 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const isAdminView = (currentUser.role === 'admin' && !currentUser.impersonating);
 
+        // --- HTML MODIFICADO PARA INCLUIR FILTRO DE CATEGORIA ---
         mainContent.innerHTML = `
             <div class="content-header">
                 <h2>Dashboard de Tarefas</h2>
-                <div class="task-filters btn-group" role="group">
-                    <button type="button" class="btn btn-outline-primary active" data-filter="all">Todas</button>
-                    <button type="button" class="btn btn-outline-primary" data-filter="mine">Minhas Tarefas</button>
-                    <button type="button" class="btn btn-outline-primary" data-filter="overdue">Atrasadas</button>
+                
+                <div class="d-flex flex-wrap gap-2" style="align-items: center;">
+                    <div class.="flex-grow-1" style="min-width: 200px;">
+                        <select id="category-filter-select" class="form-select">
+                            <option value="all">Todas as Categorias</option>
+                            <option value="none">Tarefas sem Categoria</option>
+                            </select>
+                    </div>
+                
+                    <div class="task-filters btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary active" data-filter="all">Todas</button>
+                        <button type="button" class="btn btn-outline-primary" data-filter="mine">Minhas Tarefas</button>
+                        <button type="button" class="btn btn-outline-primary" data-filter="overdue">Atrasadas</button>
+                    </div>
                 </div>
             </div>
 
@@ -600,10 +662,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="card-body p-4"><form id="task-form"></form></div>
             </div>
             <div id="task-list" class="row gy-4"></div>`;
+        // --- FIM DO HTML MODIFICADO ---
 
+
+        // --- LISTENERS MODIFICADOS ---
         mainContent.querySelector('.task-filters').addEventListener('click', handleFilterClick);
+        mainContent.querySelector('#category-filter-select').addEventListener('change', handleCategoryFilterChange); // <-- NOVO
+        
+        // Popula o novo dropdown de filtro
+        populateDashboardCategoryFilter(); // <-- NOVO
+        // --- FIM DOS LISTENERS MODIFICADOS ---
+
+
         const taskForm = mainContent.querySelector('#task-form');
         if (taskForm) {
+            // (O resto desta função não muda)
             taskForm.innerHTML = `<div class="row g-3"><div class="col-md-6"><label class="form-label">Título</label><input type="text" id="task-title" class="form-control" required></div>
             <div class="col-md-3"><label class="form-label">Prioridade</label><select id="task-priority" class="form-select"><option value="3">Baixa</option><option value="2" selected>Média</option><option value="1">Alta</option></select></div>
             <div class="col-md-3"><label class="form-label">Prazo</label><input type="date" id="task-due-date" class="form-control"></div>
@@ -641,9 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ================================== ---
-    // --- FUNÇÃO RESTAURADA: Membros da Equipe ---
-    // --- ================================== ---
+    // --- TEAM VIEW (sem alterações) ---
     async function renderTeamView() {
         mainContent.innerHTML = `
             <div class="content-header"><h2>Membros da Equipe</h2></div>
@@ -663,14 +734,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- ACTIVITY LOG VIEW (sem alterações) ---
+    // --- ACTIVITY LOG VIEW ---
     async function renderActivityLogView() {
         mainContent.innerHTML = `
             <div class="content-header">
                 <h2>Log de Atividades do Sistema</h2>
-                <button id="purge-chat-btn" class="btn btn-danger">
-                    <i class="bi bi-trash-fill"></i> Limpar Histórico do Chat
-                </button>
+                <div class="btn-group" role="group">
+                    <button id="purge-chat-btn" class="btn btn-warning text-dark">
+                        <i class="bi bi-trash-fill"></i> Limpar Chat
+                    </button>
+                    <button id="purge-log-btn" class="btn btn-danger">
+                        <i class="bi bi-shield-x"></i> Limpar Log de Atividades
+                    </button>
+                </div>
             </div>
             <div class="card">
                 <div class="card-body">
@@ -681,6 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`;
         
         document.getElementById('purge-chat-btn').addEventListener('click', handleAdminPurgeChat);
+        document.getElementById('purge-log-btn').addEventListener('click', handleAdminPurgeLog);
 
         
         try {
@@ -723,11 +800,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- VIEW SSAP (sem alterações) ---
+    // --- VIEW SSAP (MODIFICADA) ---
     async function renderSSAPView() {
         mainContent.innerHTML = `
             <div class="content-header">
-                <h2>Gerenciamento de Usuários (SSAP)</h2>
+                <h2>Gerenciamento de Usuários</h2>
             </div>
             <div class="card">
                 <div class="card-body">
@@ -767,12 +844,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? `<span class="badge bg-primary role-badge">Admin</span>` 
                     : `<span class="badge bg-secondary role-badge">Funcionário</span>`;
                 
+                // --- LINHA DE AÇÕES MODIFICADA ---
+                // Adicionamos o botão "bi-folder-plus" (Categorias)
+                // Escondemos o botão se o usuário for um 'admin' (admins veem tudo por padrão)
                 const actions = isCurrentUser ? '<span class="text-muted small">Não é possível alterar a si mesmo</span>' : `
-                    <button class="btn btn-sm btn-outline-secondary" title="Impersonar" data-action="impersonate" data-id="${user.id}" data-username="${user.username}"><i class="bi bi-person-fill-gear"></i> Impersonar</button>
+                    <button class="btn btn-sm btn-outline-info" title="Associar Categorias" data-action="categories" data-id="${user.id}" data-username="${user.username}" 
+                            style="display: ${user.role === 'admin' ? 'none' : 'inline-block'}">
+                        <i class="bi bi-folder-plus"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" title="Impersonar" data-action="impersonate" data-id="${user.id}" data-username="${user.username}"><i class="bi bi-person-fill-gear"></i></button>
                     <button class="btn btn-sm btn-outline-primary" title="Editar" data-action="edit" data-id="${user.id}"><i class="bi bi-pencil"></i></button>
                     <button class="btn btn-sm btn-outline-warning" title="Forçar Reset de Senha" data-action="reset" data-id="${user.id}" data-username="${user.username}"><i class="bi bi-key-fill"></i></button>
                     <button class="btn btn-sm btn-outline-danger" title="Excluir" data-action="delete" data-id="${user.id}" data-username="${user.username}"><i class="bi bi-trash"></i></button>
                 `;
+                // --- FIM DA MODIFICAÇÃO ---
                 
                 tableHtml += `
                     <tr>
@@ -780,8 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${user.email || 'N/A'}</td>
                         <td>${user.job_title || 'N/A'}</td>
                         <td>${roleBadge}</td>
-                        <td class="actions-cell">${actions}</td>
-                    </tr>`;
+                        <td class="actions-cell" style="min-width: 260px;">${actions}</td> </tr>`;
             });
             
             tableHtml += `</tbody></table>`;
@@ -799,6 +883,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (action === 'reset') handleAdminForceReset(userId, username);
                 if (action === 'edit') handleAdminOpenEditModal(userId);
                 if (action === 'impersonate') handleAdminImpersonate(userId, username);
+                if (action === 'categories') handleOpenAssignCategoriesModal(userId, username); // <-- NOVO
             });
             
         } catch (error) {
@@ -862,14 +947,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- RENDERIZAÇÃO DAS TAREFAS (sem alterações) ---
+    // --- RENDERIZAÇÃO DAS TAREFAS (MODIFICADO) ---
     function renderTasks() {
         const searchTerm = document.getElementById('task-search-input')?.value.toLowerCase() || '';
         const filteredBySearch = allTasks.filter(task => (task.title || '').toLowerCase().includes(searchTerm) || (task.description || '').toLowerCase().includes(searchTerm));
         
         renderDueSoonTasks(); 
 
-        const tasksToRender = filteredBySearch.filter(task => {
+        // --- LÓGICA DE FILTRO MODIFICADA ---
+        
+        // 1. Filtro por Status (All, Mine, Overdue) - Lógica existente
+        const filteredByStatus = filteredBySearch.filter(task => {
             if (currentFilter === 'mine') return task.assigned_to_id === currentUser.id;
             if (currentFilter === 'overdue') {
                 const today = new Date();
@@ -878,6 +966,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return true;
         });
+        
+        // 2. NOVO FILTRO: Por Categoria
+        const categoryId = currentCategoryFilter; // (será "all", "none", ou um ID como "5")
+        
+        const tasksToRender = filteredByStatus.filter(task => {
+            if (categoryId === 'all') {
+                return true; // "Todas as Categorias" -> Mostra tudo
+            }
+            if (categoryId === 'none') {
+                return !task.category_id; // "Sem Categoria" -> Mostra apenas onde category_id é null
+            }
+            // Filtro por ID (ex: "5") -> Mostra apenas tarefas onde category_id é igual
+            return task.category_id == categoryId; 
+        });
+        
+        // --- FIM DA LÓGICA DE FILTRO MODIFICADA ---
+        
         
         const taskList = mainContent.querySelector('#task-list');
         if (!taskList) return;
@@ -926,6 +1031,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="card-text text-muted small">${task.description || ''}</p>
                         <div class="small text-muted"><b>Prazo:</b> ${task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'} ${isOverdue ? '<span class="badge bg-danger ms-2">Atrasada</span>' : ''}</div>
                         <div class="small text-muted mt-1"><b>Para:</b> ${task.assignee_name || 'Ninguém'}</div>
+                        <div class="small text-muted mt-1"><b>Categoria:</b> ${task.category_name || 'Nenhuma'}</div> 
                         <div class="small text-muted mt-3"><b>Criado por:</b> ${task.creator_name || 'N/A'}</div>
                         <div class="small text-muted mt-1"><b>Criado em:</b> ${createdAtStr}</div>
                     </div>
@@ -934,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- MODAIS / CHAT (sem alterações) ---
+    // --- MODAIS / CHAT (MODIFICADO) ---
     function initializeModalsAndChat() {
         if (!editTaskModal) {
             const el = document.getElementById('editTaskModal');
@@ -947,6 +1053,16 @@ document.addEventListener('DOMContentLoaded', () => {
             adminUserEditModal = new bootstrap.Modal(el);
             el.querySelector('#admin-user-edit-form').addEventListener('submit', handleAdminEditUser);
         }
+
+        // --- NOVO BLOCO DE INICIALIZAÇÃO ---
+        if (!assignCategoriesModal) {
+            const el = document.getElementById('assignCategoriesModal');
+            if (el) { // Verifica se o HTML existe
+                assignCategoriesModal = new bootstrap.Modal(el);
+                el.querySelector('#assign-categories-form').addEventListener('submit', handleAdminSaveUserCategories);
+            }
+        }
+        // --- FIM DO NOVO BLOCO ---
 
         if (!quickAddTaskModal) {
             const el = document.getElementById('quickAddTaskModal');
@@ -990,10 +1106,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 chatWindow.style.display = isOpen ? 'none' : 'flex';
 
                 if (!isOpen) {
-                    // Se o chat NÃO estava aberto (e agora está),
-                    // carregamos as mensagens e marcamos como lidas.
                     try {
-                        await renderChatMessages(); // Esta função agora também marca como lido
+                        await renderChatMessages(); 
                     } catch (err) {
                         console.error('Erro ao carregar mensagens do chat:', err);
                     }
@@ -1017,6 +1131,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- ================================== ---
+    // --- NOVO HELPER: Popula Dropdown de Categoria
+    // --- ================================== ---
+    async function populateCategoryDropdown(selectElement, selectedValue = '') {
+        try {
+            const res = await fetch(`${API_URL}/categories`);
+            if (!res.ok) throw new Error('Falha ao buscar categorias');
+            const categories = await res.json();
+            
+            // Limpa opções (mantendo a primeira "Nenhuma Categoria" se ela existir)
+            const firstOption = selectElement.querySelector('option');
+            selectElement.innerHTML = '';
+            if (firstOption && (firstOption.value === "" || firstOption.value === "none")) {
+                selectElement.appendChild(firstOption);
+            } else {
+                selectElement.innerHTML = '<option value="">Nenhuma Categoria</option>';
+            }
+            
+            categories.forEach(cat => {
+                selectElement.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+            });
+            
+            // Define o valor selecionado (para o modal de edição)
+            if (selectedValue) {
+                selectElement.value = selectedValue;
+            }
+        } catch (error) {
+            console.error(error.message);
+        }
+    }
+
     function handleFilterClick(e) {
         if (e.target.tagName === 'BUTTON') {
             mainContent.querySelector('.task-filters .active').classList.remove('active');
@@ -1029,6 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- BUSCA TAREFAS (sem alterações) ---
     async function fetchAndRenderTasks() {
         try {
+            // --- MODIFICADO --- Envia o user_id para o backend saber as permissões
             const res = await fetch(`${API_URL}/tasks?user_id=${currentUser.id}`);
             if (!res.ok) throw new Error('Falha ao carregar tarefas');
             allTasks = await res.json();
@@ -1055,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const actions = {
             'edit': () => handleOpenEditModal(taskId),
             'delete': () => handleDeleteTask(taskId),
-            'comments': () => handleOpenCommentsModal(taskId, button), // Passa o botão clicado
+            'comments': () => handleOpenCommentsModal(taskId, button),
             'toggle-complete': () => handleToggleComplete(taskId)
         };
         if (actions[action]) actions[action]();
@@ -1072,6 +1218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             due_date: document.getElementById('task-due-date').value || null,
             creator_id: currentUser.id, 
             assigned_to_id: assigneeId ? parseInt(assigneeId) : null
+            // O category_id não é pego aqui, mas sim no 'handleQuickAddTask'
         };
         try {
             const res = await fetch(`${API_URL}/tasks`, {
@@ -1087,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- FUNÇÕES "ADIÇÃO RÁPIDA" (sem alterações) ---
+    // --- FUNÇÕES "ADIÇÃO RÁPIDA" ---
     async function handleOpenQuickAddModal() {
         const form = document.getElementById('quick-add-task-form');
         form.reset(); 
@@ -1095,12 +1242,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const assignContainer = document.getElementById('quick-assign-container');
         const isAdmin = (currentUser.role === 'admin' && !currentUser.impersonating);
 
+        // --- MODIFICADO ---
+        const categorySelect = document.getElementById('quick-task-category');
+
         if (isAdmin) {
-            await populateAssigneeDropdown(document.getElementById('quick-assign-to'));
+            // Popula ambos os dropdowns
+            await Promise.all([
+                populateAssigneeDropdown(document.getElementById('quick-assign-to')),
+                populateCategoryDropdown(categorySelect)
+            ]);
             assignContainer.style.display = 'block';
         } else {
+            // Popula apenas categorias
+            // (A API de /categories já é filtrada pelo backend se quisermos, mas
+            // por enquanto, o backend [GET /api/tasks] filtra o que o usuário VÊ)
+            await populateCategoryDropdown(categorySelect);
             assignContainer.style.display = 'none';
         }
+        // --- FIM MODIFICADO ---
 
         quickAddTaskModal.show();
     }
@@ -1119,13 +1278,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const dueDate = document.getElementById('quick-task-due-date').value;
 
+        // --- MODIFICADO --- Adicionado 'category_id'
         const taskData = {
             title: document.getElementById('quick-task-title').value,
             description: document.getElementById('quick-task-description').value,
             priority: parseInt(document.getElementById('quick-task-priority').value),
             due_date: dueDate || null,
             creator_id: currentUser.id,
-            assigned_to_id: assigneeId ? parseInt(assigneeId) : null
+            assigned_to_id: assigneeId ? parseInt(assigneeId) : null,
+            category_id: document.getElementById('quick-task-category').value || null // --- NOVO ---
         };
 
         try {
@@ -1147,20 +1308,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- EDIÇÃO DE TAREFA (sem alterações) ---
+    // --- EDIÇÃO DE TAREFA ---
     async function handleEditTask(e) {
         e.preventDefault();
         const form = e.target;
         const taskId = parseInt(form.dataset.taskId);
         const assigneeId = form.elements['edit-assign-to'].value;
+        
+        // --- MODIFICADO --- Adicionado 'category_id'
         const taskData = {
             title: form.elements['edit-task-title'].value,
             description: form.elements['edit-task-description'].value,
             priority: parseInt(form.elements['edit-task-priority'].value),
             due_date: form.elements['edit-task-due-date'].value || null,
             assigned_to_id: assigneeId ? parseInt(assigneeId) : null,
+            category_id: form.elements['edit-task-category'].value || null, // --- NOVO ---
             acting_user_id: currentUser.id
         };
+        
         try {
             const res = await fetch(`${API_URL}/tasks/${taskId}`, {
                 method: 'PUT',
@@ -1204,9 +1369,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- DELETAR TAREFA (sem alterações) ---
+    // --- DELETAR TAREFA ---
     function handleDeleteTask(taskId) {
-        const confirmationText = 'Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.';
+        const confirmationText = 'Você confirma a exclusão desta tarefa? Esta ação é irreversível.';
         
         document.getElementById('confirmation-modal-body').textContent = confirmationText;
         const confirmBtn = document.getElementById('confirm-action-btn');
@@ -1237,7 +1402,7 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmationModal.show();
     }
 
-    // --- ABRIR MODAL DE EDIÇÃO (sem alterações) ---
+    // --- ABRIR MODAL DE EDIÇÃO ---
     async function handleOpenEditModal(taskId) {
         try {
             const res = await fetch(`${API_URL}/tasks/${taskId}`);
@@ -1245,29 +1410,46 @@ document.addEventListener('DOMContentLoaded', () => {
             const task = await res.json();
             const form = document.getElementById('edit-task-form');
             form.dataset.taskId = taskId;
+            
+            // --- MODIFICADO --- Adicionado 'edit-task-category'
             form.innerHTML = `<div class="row g-3">
                 <div class="col-12"><label class="form-label">Título</label><input type="text" id="edit-task-title" class="form-control" value="${task.title}" required></div>
                 <div class="col-md-6"><label class="form-label">Prioridade</label><select id="edit-task-priority" class="form-select"></select></div>
                 <div class="col-md-6"><label class="form-label">Prazo</label><input type="date" id="edit-task-due-date" class="form-control" value="${task.due_date ? task.due_date.split('T')[0] : ''}"></div>
                 <div class="col-12"><label class="form-label">Descrição</label><textarea id="edit-task-description" class="form-control" rows="3" required>${task.description || ''}</textarea></div>
-                <div class="col-12"><label class="form-label">Atribuir para:</label><select id="edit-assign-to" class="form-select"><option value="">Ninguém</option></select></div>
+                <div class="col-md-6"><label class="form-label">Atribuir para:</label><select id="edit-assign-to" class="form-select"><option value="">Ninguém</option></select></div>
+                <div class="col-md-6"><label class="form-label">Categoria:</label><select id="edit-task-category" class="form-select"><option value="">Nenhuma Categoria</option></select></div>
             </div>`;
+            
             const prioritySelect = form.elements['edit-task-priority'];
             prioritySelect.innerHTML = `<option value="1">Alta</option><option value="2">Média</option><option value="3">Baixa</option>`;
             prioritySelect.value = task.priority;
+            
+            // --- MODIFICADO ---
             const assigneeSelect = form.elements['edit-assign-to'];
-            await populateAssigneeDropdown(assigneeSelect);
+            const categorySelect = form.elements['edit-task-category'];
+            
+            // Popula ambos os dropdowns em paralelo
+            await Promise.all([
+                populateAssigneeDropdown(assigneeSelect),
+                populateCategoryDropdown(categorySelect) 
+            ]);
+            
+            // Define os valores após a população
             assigneeSelect.value = task.assigned_to_id || "";
+            categorySelect.value = task.category_id || ""; // Define a categoria atual
+            // --- FIM MODIFICADO ---
+
             editTaskModal.show();
         } catch (error) {
             alert(error.message);
         }
     }
 
-    // --- FUNÇÕES SSAP (sem alterações) ---
+    // --- FUNÇÕES SSAP ---
 
     function handleAdminDeleteUser(userId, username) {
-        const confirmationText = `Tem certeza que deseja EXCLUIR permanentemente o usuário '${username}'? Esta ação não pode ser desfeita e removerá o usuário do sistema.`;
+        const confirmationText = `Você confirma a EXCLUSÃO permanente do usuário '${username}'? Esta ação é irreversível.`;
         
         document.getElementById('confirmation-modal-body').textContent = confirmationText;
         const confirmBtn = document.getElementById('confirm-action-btn');
@@ -1297,7 +1479,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleAdminForceReset(userId, username) {
-        const confirmationText = `Tem certeza que deseja FORÇAR UMA REDEFINIÇÃO DE SENHA para '${username}'? O usuário será obrigado a criar uma nova senha no próximo login.`;
+        const confirmationText = `Você confirma a redefinição de senha forçada para '${username}'? O usuário será obrigado a criar uma nova senha no próximo login.`;
         
         document.getElementById('confirmation-modal-body').textContent = confirmationText;
         const confirmBtn = document.getElementById('confirm-action-btn');
@@ -1399,7 +1581,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleAdminImpersonate(targetUserId, username) {
-        const confirmationText = `Você está prestes a "impersonar" o usuário '${username}'. Você verá o sistema exatamente como ele vê e suas ações serão registradas como se fossem dele. Deseja continuar?`;
+        const confirmationText = `Você está prestes a iniciar uma sessão como '${username}'. Suas ações serão registradas como se fossem dele. Deseja continuar?`;
         
         if (!confirm(confirmationText)) return;
 
@@ -1494,9 +1676,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ================================== ---
-    // --- Handlers de Chat (ATUALIZADOS) ---
-    // --- ================================== ---
+    // --- Handlers de Chat (sem alterações) ---
     async function handleSendChatMessage(e) {
         e.preventDefault();
         const input = document.getElementById('chat-input');
@@ -1511,31 +1691,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao enviar mensagem');
             input.value = '';
             
-            // Ao enviar uma mensagem, renderizamos o chat (que também marca como lido)
             await renderChatMessages(); 
         } catch (error) {
             alert(`Erro: ${error.message}`);
         }
     }
 
-    /**
-     * (Função ATUALIZADA)
-     * 1. Marca o chat como lido no backend.
-     * 2. Busca e renderiza as mensagens.
-     */
     async function renderChatMessages() {
-        // 1. Marca como lido PRIMEIRO
         await markChatAsRead();
         
         try {
-            // 2. Busca as mensagens
             const cacheBuster = `?_=${new Date().getTime()}`;
             const res = await fetch(`${API_URL}/chat/messages${cacheBuster}`);
             
             if (!res.ok) throw new Error('Não foi possível carregar mensagens do chat.');
             const messages = await res.json();
             
-            // 3. Renderiza
             const messagesEl = document.getElementById('chat-messages');
             messagesEl.innerHTML = '';
             messages.forEach(msg => messagesEl.innerHTML += `<div class="p-2"><strong>${msg.username}:</strong> ${msg.text}</div>`);
@@ -1567,7 +1738,9 @@ document.addEventListener('DOMContentLoaded', () => {
     })();
     
 
-    // --- FUNÇÕES DPO (sem alterações) ---
+    // --- ================================== ---
+    // --- ATUALIZAÇÃO LGPD/TEXTO: Funções DPO (Admin)
+    // --- ================================== ---
     async function renderDpoView() {
         mainContent.innerHTML = `
             <div class="content-header">
@@ -1600,8 +1773,49 @@ document.addEventListener('DOMContentLoaded', () => {
             requests.forEach(req => {
                 const createdAt = new Date(req.created_at).toLocaleString('pt-BR');
                 let responseHtml = '';
+                let extraInfoHtml = '';
                 
-                if (req.status === 'answered') {
+                // Mapeia os tipos de solicitação para nomes amigáveis
+                const requestTypesMap = {
+                    'access': 'Solicitação de Acesso',
+                    'correction': 'Solicitação de Correção',
+                    'anonymization': 'Solicitação de Anonimização (Manual)', // ATUALIZAÇÃO DE TEXTO
+                    'anonymization_request': 'Solicitação de Anonimização (Iniciada pelo Usuário)', // ATUALIZAÇÃO DE TEXTO
+                    'question': 'Dúvida Geral'
+                };
+                const requestTypeDisplay = requestTypesMap[req.request_type] || req.request_type;
+
+                // --- ATUALIZAÇÃO LGPD/TEXTO: Lógica de Exibição ---
+                if (req.request_type === 'anonymization_request' || req.request_type === 'anonymization') {
+                    
+                    if (req.scheduled_for) {
+                        const scheduledDate = new Date(req.scheduled_for).toLocaleString('pt-BR');
+                        extraInfoHtml = `<p class="mb-2 text-danger"><strong><i class="bi bi-alarm-fill"></i> Anonimização Agendada para:</strong> ${scheduledDate}</p>`;
+                    }
+
+                    if (req.status === 'pending') {
+                        // Botão de Executar em vez de responder
+                        responseHtml = `
+                            <div class="mt-3">
+                                <button class="btn btn-danger w-100" data-action="execute-anonymization" data-id="${req.id}" data-username="${req.user_username}">
+                                    <i class="bi bi-shield-x"></i> Executar Anonimização Agora
+                                </button>
+                                <p class="text-muted small mt-1">Atenção: Esta ação é imediata, irreversível e irá anonimizar a conta do usuário ${req.user_username}.</p>
+                            </div>
+                        `;
+                    } else {
+                        // Já foi executada (answered)
+                        const respondedAt = new Date(req.responded_at).toLocaleString('pt-BR');
+                        responseHtml = `
+                            <div class="mt-3 p-3 bg-light border rounded">
+                                <h6 class="text-success"><i class="bi bi-check-circle-fill"></i> Processado por: ${req.admin_username || 'Admin'} em ${respondedAt}</h6>
+                                <p class="mb-0">${req.response_text}</p>
+                            </div>
+                        `;
+                    }
+                
+                } else if (req.status === 'answered') {
+                    // Lógica original para 'answered' (para 'access', 'correction', 'question')
                     const respondedAt = new Date(req.responded_at).toLocaleString('pt-BR');
                     responseHtml = `
                         <div class="mt-3 p-3 bg-light border rounded">
@@ -1610,6 +1824,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     `;
                 } else {
+                    // Lógica original para 'pending' (formulário de resposta)
                     responseHtml = `
                         <form class="dpo-response-form mt-3" data-request-id="${req.id}">
                             <div class="mb-2">
@@ -1620,19 +1835,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         </form>
                     `;
                 }
+                // --- FIM DA ATUALIZAÇÃO ---
+
 
                 html += `
                     <div class="list-group-item list-group-item-action flex-column align-items-start mb-3 border">
                         <div class="d-flex w-100 justify-content-between">
-                            <h5 class="mb-1">${req.request_type}</h5>
+                            <h5 class="mb-1">${requestTypeDisplay}</h5>
                             <small class="text-muted">${createdAt}</small>
                         </div>
                         <p class="mb-1"><strong>De:</strong> ${req.user_username}</p>
                         <p class="mb-2"><strong>Mensagem:</strong> ${req.message_text}</p>
                         
-                        <div class="d-flex justify-content-between align-items-center">
+                        ${extraInfoHtml} <div class="d-flex justify-content-between align-items-center">
                             <span class="badge bg-${req.status === 'pending' ? 'warning text-dark' : 'success'}">
-                                ${req.status === 'pending' ? 'Pendente' : 'Respondido'}
+                                ${req.status === 'pending' ? 'Pendente' : (req.request_type.includes('anonymization') ? 'Processado' : 'Respondido')}
                             </span>
                             <button class="btn btn-outline-danger btn-sm" data-action="delete" data-id="${req.id}" title="Excluir Solicitação">
                                 <i class="bi bi-trash"></i>
@@ -1656,14 +1873,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- ATUALIZAÇÃO LGPD: Handler de Clique DPO ---
     function handleDpoViewClick(e) {
         const deleteButton = e.target.closest('button[data-action="delete"]');
-        
         if (deleteButton) {
             e.preventDefault();
             const requestId = deleteButton.dataset.id;
             handleAdminDeleteDpoRequest(requestId);
+            return; // Impede que outros cliques sejam processados
         }
+
+        // Handler para o botão de executar
+        const executeButton = e.target.closest('button[data-action="execute-anonymization"]');
+        if (executeButton) {
+            e.preventDefault();
+            const requestId = executeButton.dataset.id;
+            const username = executeButton.dataset.username;
+            handleAdminExecuteAnonymization(requestId, username);
+            return;
+        }
+    }
+
+    // --- ================================== ---
+    // --- ATUALIZAÇÃO LGPD/TEXTO: Executar Exclusão (Admin)
+    // --- ================================== ---
+    function handleAdminExecuteAnonymization(requestId, username) {
+        // ATUALIZAÇÃO DE TEXTO
+        const confirmationText = `Você confirma a EXECUÇÃO da anonimização para o usuário '${username}' (Solicitação ID ${requestId})? Esta ação é imediata e não pode ser desfeita.`;
+        
+        document.getElementById('confirmation-modal-body').textContent = confirmationText;
+        const confirmBtn = document.getElementById('confirm-action-btn');
+        
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`${API_URL}/admin/execute-anonymization`, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        admin_user_id: currentUser.id,
+                        request_id: parseInt(requestId)
+                    })
+                });
+                const data = await res.json();
+                // ATUALIZAÇÃO DE TEXTO
+                if (!res.ok) throw new Error(data.error || 'Não foi possível executar a anonimização.');
+                
+                confirmationModal.hide();
+                // ATUALIZAÇÃO DE TEXTO
+                alert(data.message || 'Usuário anonimizado com sucesso.');
+                renderView('dpo'); // Recarrega a view DPO
+            } catch (err) {
+                alert(err.message);
+                confirmationModal.hide();
+            }
+        }, { once: true });
+
+        confirmationModal.show();
     }
 
 
@@ -1702,6 +1970,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // --- ================================== ---
+    // --- ATUALIZAÇÃO LGPD/TEXTO: Minhas Solicitações DPO (Usuário)
+    // --- ================================== ---
     async function loadMyDpoRequests() {
         const container = document.getElementById('my-dpo-requests-list');
         if (!container) return; 
@@ -1723,7 +1994,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 const createdAt = new Date(req.created_at).toLocaleString('pt-BR');
                 let responseHtml = '';
                 
-                if (req.status === 'answered') {
+                // Mapeia os tipos de solicitação para nomes amigáveis
+                const requestTypesMap = {
+                    'access': 'Solicitação de Acesso',
+                    'correction': 'Solicitação de Correção',
+                    'anonymization': 'Solicitação de Anonimização', // ATUALIZAÇÃO DE TEXTO
+                    'anonymization_request': 'Solicitação de Anonimização', // ATUALIZAÇÃO DE TEXTO
+                    'question': 'Dúvida Geral'
+                };
+                const requestTypeDisplay = requestTypesMap[req.request_type] || req.request_type;
+
+                
+                // --- ATUALIZAÇÃO LGPD/TEXTO ---
+                if (req.request_type === 'anonymization_request' || req.request_type === 'anonymization') {
+                    if (req.status === 'pending' && req.scheduled_for) {
+                        const scheduledDate = new Date(req.scheduled_for).toLocaleDateString('pt-BR');
+                        responseHtml = `
+                            <div class="mt-2">
+                                <span class="badge bg-warning text-dark">Pendente</span>
+                                <p class="small text-muted mb-0 mt-1">Sua conta está agendada para anonimização em: <strong>${scheduledDate}</strong>.</p>
+                            </div>
+                        `;
+                    } else if (req.status === 'answered') {
+                        // O usuário não deve ver isso, pois a conta estará anonimizada
+                        responseHtml = `<div class="mt-2"><span class="badge bg-success">Processado</span></div>`;
+                    }
+                } else if (req.status === 'answered') {
                     const respondedAt = new Date(req.responded_at).toLocaleString('pt-BR');
                     responseHtml = `
                         <div class="mt-2 p-2 bg-light border rounded" style="font-size: 0.9rem;">
@@ -1738,11 +2034,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                      `;
                 }
+                // --- FIM DA ATUALIZAÇÃO ---
                 
                 html += `
                     <div class="list-group-item px-0 py-3">
                         <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">${req.request_type}</h6>
+                            <h6 class="mb-1">${requestTypeDisplay}</h6>
                             <small class="text-muted">${createdAt}</small>
                         </div>
                         <p class="mb-1 text-muted small"><strong>Sua Mensagem:</strong> ${req.message_text}</p>
@@ -1760,7 +2057,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- FUNÇÕES DE ADMIN (sem alterações) ---
+    // --- Log de Conclusões ---
+    async function loadMyActivityLog() {
+        const container = document.getElementById('user-activity-log-container');
+        if (!container) return; 
+
+        try {
+            const response = await fetch(`${API_URL}/user/my-activity-log?user_id=${currentUser.id}`);
+            if (!response.ok) throw new Error('Não foi possível carregar seu histórico de conclusões.');
+            
+            const logs = await response.json();
+
+            if (logs.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted small m-0">Nenhuma atividade de conclusão registrada.</p>';
+                return;
+            }
+            
+            let tableHtml = `
+                <table class="table table-striped table-hover user-activity-log-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Ação</th>
+                            <th scope="col">Data e Hora</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            logs.forEach(log => {
+                const timestamp = new Date(log.timestamp).toLocaleString('pt-BR');
+                tableHtml += `
+                    <tr>
+                        <td>${log.action_text}</td>
+                        <td>${timestamp}</td>
+                    </tr>`;
+            });
+            
+            tableHtml += `</tbody></table>`;
+            container.innerHTML = tableHtml;
+
+        } catch (error) {
+            container.innerHTML = `<p class="text-danger small">${error.message}</p>`;
+        }
+    }
+
+
+    // --- FUNÇÕES DE ADMIN ---
     function handleAdminDeleteDpoRequest(requestId) {
         const confirmationText = 'Tem certeza que deseja EXCLUIR permanentemente esta solicitação DPO? Esta ação não pode ser desfeita.';
         
@@ -1793,7 +2134,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function handleAdminPurgeChat() {
-        const confirmationText = 'TEM CERTEZA? Esta ação irá deletar PERMANENTEMENTE todas as mensagens do chat geral para todos os usuários. Esta ação não pode ser desfeita.';
+        const confirmationText = 'ATENÇÃO: Você confirma a exclusão permanente de todas as mensagens do chat? Esta ação é irreversível.';
         
         document.getElementById('confirmation-modal-body').textContent = confirmationText;
         const confirmBtn = document.getElementById('confirm-action-btn');
@@ -1828,74 +2169,345 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmationModal.show();
     }
 
+    // --- Função Purge Log ---
+    function handleAdminPurgeLog() {
+        const confirmationText = 'ATENÇÃO: Você confirma a exclusão permanente de todo o Log de Atividades? Esta ação é irreversível.';
+        
+        document.getElementById('confirmation-modal-body').textContent = confirmationText;
+        const confirmBtn = document.getElementById('confirm-action-btn');
+        
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`${API_URL}/admin/activity-log/purge`, { 
+                    method: 'DELETE', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Não foi possível limpar o log.');
+                
+                confirmationModal.hide();
+                alert(data.message || 'Log de Atividades limpo com sucesso.');
+                
+                renderView('log');
+                
+            } catch (err) {
+                alert(err.message);
+                confirmationModal.hide();
+            }
+        }, { once: true });
+
+        confirmationModal.show();
+    }
+
+    
     // --- ================================== ---
-    // --- FUNÇÕES DE NOTIFICAÇÃO (ATUALIZADAS) ---
+    // --- NOVO BLOCO: ADMIN CATEGORY MANAGEMENT
+    // --- ================================== ---
+
+    async function renderCategoryManagementView() {
+        mainContent.innerHTML = `
+            <div class="content-header">
+                <h2>Gerenciar Categorias (Pastas)</h2>
+            </div>
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header"><h5 id="category-form-title" class="mb-0">Adicionar Nova Categoria</h5></div>
+                        <div class="card-body">
+                            <form id="category-form">
+                                <input type="hidden" id="category-form-id" value="">
+                                <div class="mb-3">
+                                    <label for="category-name" class="form-label">Nome da Categoria</label>
+                                    <input type="text" id="category-name" class="form-control" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="category-description" class="form-label">Descrição (Opcional)</label>
+                                    <textarea id="category-description" class="form-control" rows="3"></textarea>
+                                </div>
+                                <div id="category-form-error" class="error-message"></div>
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" id="category-form-cancel" class="btn btn-secondary" style="display: none;">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary">Salvar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header"><h5 class="mb-0">Categorias Existentes</h5></div>
+                        <div class="card-body">
+                            <div id="category-list-container">
+                                <div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Adiciona listeners
+        document.getElementById('category-form').addEventListener('submit', handleAdminSaveCategory);
+        document.getElementById('category-form-cancel').addEventListener('click', resetCategoryForm);
+        document.getElementById('category-list-container').addEventListener('click', handleCategoryListClick);
+
+        // Carrega a lista
+        loadCategories();
+    }
+
+    async function loadCategories() {
+        const container = document.getElementById('category-list-container');
+        if (!container) return; // Sai se a view não estiver ativa
+        
+        try {
+            const res = await fetch(`${API_URL}/categories`);
+            if (!res.ok) throw new Error('Não foi possível carregar as categorias.');
+            const categories = await res.json();
+
+            if (categories.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center">Nenhuma categoria encontrada.</p>';
+                return;
+            }
+
+            let tableHtml = `
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            categories.forEach(cat => {
+                // Escapa os valores para uso seguro em atributos HTML
+                const safeName = cat.name.replace(/"/g, '&quot;');
+                const safeDescription = (cat.description || '').replace(/"/g, '&quot;');
+                
+                tableHtml += `
+                    <tr>
+                        <td class="fw-bold">${cat.name}</td>
+                        <td class="text-muted small">${cat.description || 'N/A'}</td>
+                        <td class="actions-cell" style="text-align: right;">
+                            <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${cat.id}" 
+                                    data-name="${safeName}" data-description="${safeDescription}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${cat.id}" data-name="${safeName}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tableHtml += '</tbody></table>';
+            container.innerHTML = tableHtml;
+
+        } catch (error) {
+            container.innerHTML = `<p class="text-danger text-center">${error.message}</p>`;
+        }
+    }
+
+    function handleCategoryListClick(e) {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const id = button.dataset.id;
+        const name = button.dataset.name;
+
+        if (action === 'edit') {
+            document.getElementById('category-form-title').textContent = `Editar Categoria: ${name}`;
+            document.getElementById('category-form-id').value = id;
+            document.getElementById('category-name').value = name;
+            document.getElementById('category-description').value = button.dataset.description;
+            document.getElementById('category-form-cancel').style.display = 'inline-block';
+            document.querySelector('#category-form button[type="submit"]').textContent = 'Salvar Alterações';
+            
+            // Foca o campo de nome
+            document.getElementById('category-name').focus();
+        }
+        
+        if (action === 'delete') {
+            handleAdminDeleteCategory(id, name);
+        }
+    }
+
+    function resetCategoryForm() {
+        document.getElementById('category-form-title').textContent = 'Adicionar Nova Categoria';
+        document.getElementById('category-form').reset();
+        document.getElementById('category-form-id').value = '';
+        document.getElementById('category-form-cancel').style.display = 'none';
+        document.querySelector('#category-form button[type="submit"]').textContent = 'Salvar';
+        document.getElementById('category-form-error').textContent = '';
+    }
+
+    async function handleAdminSaveCategory(e) {
+        e.preventDefault();
+        const form = e.target;
+        const categoryId = form.elements['category-form-id'].value;
+        const name = form.elements['category-name'].value.trim();
+        const description = form.elements['category-description'].value.trim();
+        const errorEl = document.getElementById('category-form-error');
+        errorEl.textContent = '';
+
+        const payload = {
+            admin_user_id: currentUser.id,
+            name: name,
+            description: description
+        };
+
+        let url = `${API_URL}/admin/categories`;
+        let method = 'POST';
+
+        if (categoryId) {
+            url = `${API_URL}/admin/categories/${categoryId}`;
+            method = 'PUT';
+        }
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Erro ao salvar categoria.');
+
+            resetCategoryForm();
+            loadCategories(); // Recarrega a lista
+
+        } catch (error) {
+            errorEl.textContent = error.message;
+        }
+    }
+
+    function handleAdminDeleteCategory(id, name) {
+        const confirmationText = `Tem certeza que deseja excluir a categoria '${name}'? Todas as tarefas nela serão movidas para "Nenhuma Categoria". Esta ação é irreversível.`;
+        
+        document.getElementById('confirmation-modal-body').textContent = confirmationText;
+        const confirmBtn = document.getElementById('confirm-action-btn');
+        
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch(`${API_URL}/admin/categories/${id}`, { 
+                    method: 'DELETE', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Não foi possível excluir a categoria.');
+                
+                confirmationModal.hide();
+                loadCategories(); // Recarrega a lista
+            } catch (err) {
+                alert(err.message);
+                confirmationModal.hide();
+            }
+        }, { once: true });
+
+        confirmationModal.show();
+    }
+    // --- FIM DO BLOCO DE CATEGORIAS ---
+
+
+    // --- ================================== ---
+    // --- FUNÇÕES DE NOTIFICAÇÃO (CORRIGIDAS)
     // --- ================================== ---
     
-    /**
-     * (Função ATUALIZADA)
-     * Apenas inicia o verificador (poller) e roda ele uma vez.
-     */
+    // --- NOVO BLOCO: Lógica de Notificação DPO (Sob Demanda, "como as tarefas") ---
+    async function updateDpoBadge() {
+        // Só executa se for admin e não estiver impersonando
+        if (!currentUser || currentUser.role !== 'admin' || currentUser.impersonating) {
+            return;
+        }
+
+        try {
+            const cacheBuster = `&_=${new Date().getTime()}`;
+            // A URL usa '?' para o primeiro parâmetro e '&' para o segundo
+            const res = await fetch(`${API_URL}/admin/dpo-pending-count?admin_user_id=${currentUser.id}${cacheBuster}`);
+            
+            const dpoBadge = document.getElementById('dpo-notification-badge');
+            if (!dpoBadge) return; // Sai se o elemento não existir
+
+            if (res.ok) {
+                const data = await res.json();
+                
+                // Verifica se a aba DPO está ativa
+                const isDpoViewActive = document.querySelector(`#sidebar .components li[data-view="dpo"]`)?.classList.contains('active');
+
+                // Lógica (igual à do chat):
+                // SÓ mostra o badge se a contagem > 0 E o usuário NÃO estiver na tela DPO
+                if (data.pendingCount > 0 && !isDpoViewActive) {
+                    dpoBadge.textContent = data.pendingCount;
+                    dpoBadge.style.display = 'flex';
+                } else {
+                    // Esconde em todos os outros casos (contagem 0 OU usuário já está na tela DPO)
+                    dpoBadge.style.display = 'none';
+                }
+            } else {
+                // Se a API falhar, esconde o badge
+                dpoBadge.style.display = 'none';
+            }
+        } catch (e) {
+            /* Falha silenciosamente */
+            const dpoBadge = document.getElementById('dpo-notification-badge');
+            if (dpoBadge) dpoBadge.style.display = 'none';
+        }
+    }
+    // --- FIM DO NOVO BLOCO ---
+
+
     async function initializeNotificationState() {
-        // Roda a verificação a cada 5 segundos
+        // Inicia o polling (agora apenas para o chat)
         setInterval(pollForNotifications, 5000); 
-        // Roda a verificação uma vez agora mesmo
+        // Executa uma vez ao carregar (apenas para o chat)
         pollForNotifications();
     }
 
-    /**
-     * (Função ATUALIZADA)
-     * Verifica se há novas mensagens de chat usando a nova rota de "não lidos".
-     */
+    // --- FUNÇÃO DE POLLING (CORRIGIDA - SÓ PARA O CHAT) ---
     async function pollForNotifications() {
-        if (!currentUser) return; // Não faz nada se o usuário não estiver logado
+        if (!currentUser) return; 
+        
+        const cacheBuster = `&_=${new Date().getTime()}`;
 
+        // 1. Verificar Chat (O DPO FOI REMOVIDO DESTA FUNÇÃO)
         try {
-            // --- LÓGICA ATUALIZADA ---
-            // 1. Pergunta ao backend "Ei, eu tenho mensagens não lidas?"
-            const cacheBuster = `?_=${new Date().getTime()}`;
+            // A URL do chat usa '?' porque é o primeiro parâmetro
             const res = await fetch(`${API_URL}/chat/unread-count?user_id=${currentUser.id}${cacheBuster}`);
-            
-            if (!res.ok) {
-                // Se a rota ainda não existe no app.py, vai falhar aqui.
-                // console.warn("A rota /api/chat/unread-count ainda não existe no backend.");
-                return; 
-            }
-            
-            const data = await res.json();
-            
-            // 2. Verifica a resposta
-            if (data.unreadCount > 0) {
-                // 3. Se temos não lidos, verificamos se o chat está FECHADO.
-                const chatWindow = document.getElementById('chat-window');
-                const isChatOpen = window.getComputedStyle(chatWindow).display === 'flex';
-                
-                if (isChatOpen) {
-                    // Se o chat está aberto, atualiza as mensagens (que também marcará como lido)
-                    await renderChatMessages();
+            if (res.ok) {
+                const data = await res.json();
+                if (data.unreadCount > 0) {
+                    const chatWindow = document.getElementById('chat-window');
+                    const isChatOpen = window.getComputedStyle(chatWindow).display === 'flex';
+                    if (isChatOpen) {
+                        await renderChatMessages();
+                    } else {
+                        document.getElementById('chat-notification-badge').style.display = 'block';
+                    }
                 } else {
-                    // Se o chat está fechado, MOSTRA o ponto.
-                    document.getElementById('chat-notification-badge').style.display = 'block';
+                     document.getElementById('chat-notification-badge').style.display = 'none';
                 }
-            } else {
-                // 4. Se temos 0 não lidos, ESCONDE o ponto.
-                 document.getElementById('chat-notification-badge').style.display = 'none';
             }
         } catch(e) { 
             /* Falha silenciosamente */ 
-            // console.error("Falha ao verificar 'unread-count'. O backend (app.py) está atualizado?", e);
         }
+
+        // 2. Seção DPO removida.
     }
     
-    /**
-     * (Função NOVA)
-     * Avisa o backend que lemos o chat.
-     */
     async function markChatAsRead() {
-        // 1. Esconde o ponto visualmente (ação imediata)
         document.getElementById('chat-notification-badge').style.display = 'none';
         
-        // 2. Informa ao backend (em segundo plano)
         try {
             await fetch(`${API_URL}/chat/mark-as-read`, {
                 method: 'POST',
@@ -1907,5 +2519,123 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- ================================== ---
+    // --- NOVO BLOCO: Filtros do Dashboard
+    // --- ================================== ---
+
+    // 1. Nova Função: Preenche o dropdown de filtro no Dashboard
+    async function populateDashboardCategoryFilter() {
+        const selectElement = document.getElementById('category-filter-select');
+        if (!selectElement) return; // Sai se o elemento não existir
+
+        try {
+            const res = await fetch(`${API_URL}/categories`);
+            if (!res.ok) throw new Error('Falha ao buscar categorias para o filtro');
+            const categories = await res.json();
+            
+            // Adiciona cada categoria como uma opção
+            categories.forEach(cat => {
+                selectElement.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+            });
+            
+            // Define o valor que estava selecionado anteriormente (se houver)
+            selectElement.value = currentCategoryFilter;
+
+        } catch (error) {
+            console.error(error.message);
+        }
+    }
+
+    // 2. Nova Função: Handler para quando o filtro de categoria mudar
+    function handleCategoryFilterChange(e) {
+        currentCategoryFilter = e.target.value; // Salva a escolha (ex: "all", "none", ou "5")
+        renderTasks(); // Re-renderiza a lista de tarefas
+    }
+    
+    // --- ================================== ---
+    // --- NOVO BLOCO: Lógica de Associação de Categorias
+    // --- ================================== ---
+    
+    async function handleOpenAssignCategoriesModal(userId, username) {
+        // Define os valores no modal
+        document.getElementById('assign-categories-username').textContent = username;
+        document.getElementById('assign-categories-userid').value = userId;
+        const listContainer = document.getElementById('assign-categories-list');
+        listContainer.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>'; // Loading
+        
+        assignCategoriesModal.show();
+
+        try {
+            // 1. Busca TODAS as categorias disponíveis
+            const resAll = await fetch(`${API_URL}/categories`);
+            if (!resAll.ok) throw new Error('Falha ao buscar lista de categorias.');
+            const allCategories = await resAll.json();
+
+            // 2. Busca as categorias que o USUÁRIO já possui
+            const resUser = await fetch(`${API_URL}/admin/user/${userId}/categories?admin_user_id=${currentUser.id}`);
+            if (!resUser.ok) throw new Error('Falha ao buscar categorias do usuário.');
+            const userCategoryIds = await resUser.json(); // (Irá retornar uma lista: [1, 5, 7])
+
+            // 3. Renderiza os checkboxes
+            if (allCategories.length === 0) {
+                listContainer.innerHTML = '<p class="text-muted text-center">Nenhuma categoria cadastrada. Crie categorias na tela "Categorias" primeiro.</p>';
+                return;
+            }
+
+            let html = '';
+            allCategories.forEach(cat => {
+                // Verifica se o ID desta categoria está na lista de IDs do usuário
+                const isChecked = userCategoryIds.includes(cat.id);
+                
+                html += `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="${cat.id}" id="cat-${cat.id}" 
+                               name="category_ids" ${isChecked ? 'checked' : ''}>
+                        <label class="form-check-label" for="cat-${cat.id}">
+                            <strong>${cat.name}</strong>
+                        </label>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = html;
+
+        } catch (error) {
+            document.getElementById('assign-categories-error').textContent = error.message;
+        }
+    }
+
+    async function handleAdminSaveUserCategories(e) {
+        e.preventDefault();
+        const form = e.target;
+        const userId = form.elements['assign-categories-userid'].value;
+        const errorEl = document.getElementById('assign-categories-error');
+        errorEl.textContent = '';
+        
+        // Pega todos os checkboxes marcados
+        const checkedBoxes = form.querySelectorAll('input[name="category_ids"]:checked');
+        // Transforma o NodeList em uma lista de IDs (números)
+        const selectedCategoryIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+
+        const payload = {
+            admin_user_id: currentUser.id,
+            category_ids: selectedCategoryIds
+        };
+
+        try {
+            const res = await fetch(`${API_URL}/admin/user/${userId}/categories`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Erro ao salvar permissões.');
+
+            assignCategoriesModal.hide();
+            // Nenhuma recarga de view é necessária
+
+        } catch (error) {
+            errorEl.textContent = error.message;
+        }
+    }
 
 });
