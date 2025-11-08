@@ -4,7 +4,7 @@ import hashlib
 import os 
 import secrets
 from flask_cors import CORS
-from datetime import date, datetime
+from datetime import date, datetime, timedelta 
 
 app = Flask(__name__)
 CORS(app)
@@ -271,7 +271,9 @@ def change_password():
     return jsonify({'message': 'Senha atualizada com sucesso.'})
 
 
-# --- ROTA LGPD (Auto-Exclusão) ---
+# --- ================================================ ---
+# --- ATUALIZAÇÃO LGPD/TEXTO: Rota de Auto-Exclusão (Solicitação)
+# --- ================================================ ---
 @app.route('/api/user/delete-self', methods=['POST'])
 def delete_self_account():
     data = request.json
@@ -282,49 +284,43 @@ def delete_self_account():
         
     cursor = mysql.connection.cursor()
     try:
-        cursor.execute("SELECT role FROM users WHERE id = %s", (user_id,))
-        user = cursor.fetchone()
-        if user and user['role'] == 'admin':
-            cursor.execute("SELECT COUNT(*) as admin_count FROM users WHERE role = 'admin'")
-            admin_count = cursor.fetchone()['admin_count']
-            if admin_count <= 1:
-                cursor.close()
-                return jsonify({'error': 'Você não pode excluir sua conta pois é o único administrador. Por favor, promova outro usuário a administrador primeiro.'}), 403
-
-        anon_username = f"usuario_anonimizado_{user_id}"
-        anon_email = f"deleted_{user_id}@taskflow.up"
-        null_salt = create_salt() 
-        null_pass = hash_password(secrets.token_hex(32), null_salt)
-        
+        # Verifica se já existe uma solicitação pendente
         cursor.execute(
-            """UPDATE users 
-               SET username = %s, 
-                   email = %s, 
-                   job_title = 'Ex-Funcionário', 
-                   password_hash = %s, 
-                   salt = %s,
-                   needs_password_reset = 1
-               WHERE id = %s""",
-            (anon_username, anon_email, null_pass, null_salt, user_id)
+            "SELECT id FROM dpo_requests WHERE user_id = %s AND request_type = 'anonymization_request' AND status = 'pending'",
+            (user_id,)
         )
-        
-        cursor.execute("UPDATE task_comments SET text = '[comentário removido pelo usuário]' WHERE user_id = %s", (user_id,))
-        cursor.execute("UPDATE chat_messages SET text = '[mensagem removido pelo usuário]' WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM task_read_timestamps WHERE user_id = %s", (user_id,))
+        if cursor.fetchone():
+            cursor.close()
+            # ATUALIZAÇÃO DE TEXTO
+            return jsonify({'message': 'Você já possui uma solicitação de exclusão pendente.'}), 200
 
+        # Define a data de agendamento (7 dias a partir de agora)
+        scheduled_date = datetime.now() + timedelta(days=7)
+        # ATUALIZAÇÃO DE TEXTO (manter 'anonimização' para o DPO)
+        message_text = "Solicitação de exclusão (anonimização) de conta iniciada pelo usuário. Agendada para execução em 7 dias."
+        request_type = "anonymization_request" # Tipo interno, não mudar
+        
+        # Insere a solicitação de DPO
+        cursor.execute(
+            """INSERT INTO dpo_requests (user_id, request_type, message_text, status, created_at, scheduled_for) 
+               VALUES (%s, %s, %s, 'pending', NOW(), %s)""",
+            (user_id, request_type, message_text, scheduled_date)
+        )
         mysql.connection.commit()
         
-        log_text = f"teve sua conta anonimizada (auto-exclusão, ID: {user_id})."
-        log_activity(user_id, log_text) 
+        # ATUALIZAÇÃO DE TEXTO
+        log_activity(user_id, f"solicitou a exclusão (anonimização) da própria conta, agendada para {scheduled_date.strftime('%Y-%m-%d')}.")
         
         cursor.close()
-        return jsonify({'message': 'Conta anonimizada com sucesso.'}), 200
+        # ATUALIZAÇÃO DE TEXTO
+        return jsonify({'message': 'Solicitação de exclusão recebida. Sua conta será excluída (anonimizada) em 7 dias. Você pode cancelar esta solicitação entrando em contato com o DPO.'}), 200
         
     except Exception as e:
         mysql.connection.rollback()
         cursor.close()
-        print(f"Erro ao anonimizar conta: {e}")
-        return jsonify({'error': f'Erro ao processar exclusão de conta: {str(e)}'}), 500
+        print(f"Erro ao solicitar exclusão: {e}") # ATUALIZAÇÃO DE TEXTO
+        return jsonify({'error': f'Erro ao processar solicitação: {str(e)}'}), 500
+# --- Fim da Atualização ---
 
 
 # --- Rotas de Usuário ---
@@ -437,21 +433,42 @@ def get_analytics():
     return jsonify(analytics_data)
 
 
-# --- Rotas de Tarefas ---
+# --- ================================== ---
+# --- ROTAS DE TAREFAS (MODIFICADAS) ---
+# --- ================================== ---
+
 @app.route('/api/tasks', methods=['GET', 'POST'])
 def tasks():
     cursor = mysql.connection.cursor()
+    
+    # --- LÓGICA DO GET MODIFICADA (PARA FILTRAGEM DE PERMISSÃO) ---
     if request.method == 'GET':
         user_id = request.args.get('user_id')
-        if not user_id:
-            user_id = 0 
-            
+        user_role = 'funcionario' # Padrão
+        
+        if not user_id or user_id == '0':
+            user_id = 0 # Define para a query de 'unread' funcionar
+        else:
+            # Se temos um user_id, vamos checar o 'role' dele
+            try:
+                user_id = int(user_id)
+                cursor.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+                user = cursor.fetchone()
+                if user:
+                    user_role = user['role']
+            except Exception as e:
+                print(f"Erro ao checar role do usuário: {e}")
+                # Mantém o role de funcionário por segurança
+        
+        
+        # Query base (Admin vê tudo)
         query = """
             SELECT 
                 t.*, 
                 u_creator.username AS creator_name, 
                 u_assignee.username AS assignee_name, 
-                COUNT(tc.id) AS comment_count,
+                tc.name AS category_name,
+                COUNT(tc_comments.id) AS comment_count,
                 (
                     SELECT COUNT(tc_unread.id)
                     FROM task_comments tc_unread
@@ -462,11 +479,31 @@ def tasks():
             FROM tasks t
             LEFT JOIN users u_creator ON t.creator_id = u_creator.id
             LEFT JOIN users u_assignee ON t.assigned_to_id = u_assignee.id
-            LEFT JOIN task_comments tc ON t.id = tc.task_id
-            GROUP BY t.id 
+            LEFT JOIN task_categories tc ON t.category_id = tc.id
+            LEFT JOIN task_comments tc_comments ON t.id = tc_comments.task_id
+        """
+        
+        params = [user_id] # Parâmetro para o sub-select de 'unread'
+
+        # Se for funcionário, aplicamos o filtro de segurança
+        if user_role == 'funcionario':
+            query += """
+                -- Filtro de permissão:
+                -- Junta com user_categories ONDE (o usuário está na categoria E a tarefa também)
+                -- OU a tarefa não tem categoria (category_id IS NULL), permitindo que todos vejam
+                LEFT JOIN user_categories uc ON t.category_id = uc.category_id
+                WHERE (uc.user_id = %s OR t.category_id IS NULL)
+            """
+            # Adiciona o user_id de novo, desta vez para o filtro de permissão
+            params.append(user_id) 
+
+        
+        query += """
+            GROUP BY t.id, tc.name
             ORDER BY t.completed ASC, t.priority ASC, t.due_date ASC
         """
-        cursor.execute(query, (user_id,)) 
+        
+        cursor.execute(query, tuple(params)) 
         
         tasks_list = cursor.fetchall()
         cursor.close()
@@ -475,15 +512,20 @@ def tasks():
                 if isinstance(value, (datetime, date)): task[key] = value.isoformat()
         return jsonify(tasks_list)
     
+    # --- LÓGICA DO POST (MODIFICADA PARA CATEGORIA) ---
     if request.method == 'POST':
         data = request.json
         creator_id, assigned_to_id = data.get('creator_id'), data.get('assigned_to_id') or None
         due_date = data.get('due_date') or None
         created_at_time = datetime.now()
         
+        # --- MODIFICADO ---
+        category_id = data.get('category_id') or None
+        
+        # --- MODIFICADO --- Query atualizada
         cursor.execute(
-            "INSERT INTO tasks (title, description, priority, due_date, creator_id, assigned_to_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", 
-            (data.get('title'), data.get('description'), data.get('priority'), due_date, creator_id, assigned_to_id, created_at_time)
+            "INSERT INTO tasks (title, description, priority, due_date, creator_id, assigned_to_id, created_at, category_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", 
+            (data.get('title'), data.get('description'), data.get('priority'), due_date, creator_id, assigned_to_id, created_at_time, category_id)
         )
         mysql.connection.commit()
         cursor.close()
@@ -504,22 +546,41 @@ def manage_task(task_id):
             return jsonify(task)
         return jsonify({'error': 'Tarefa não encontrada.'}), 404
 
+    try:
+        cursor.execute("SELECT title FROM tasks WHERE id = %s", (task_id,))
+        task = cursor.fetchone()
+        current_title = task['title'] if task else "Tarefa Desconhecida"
+    except Exception as e:
+        print(f"Erro ao buscar título da tarefa {task_id}: {e}")
+        current_title = "Tarefa Desconhecida"
+
+
     if request.method == 'PUT':
         data = request.json
         acting_user_id = data.get('acting_user_id')
         
+        if 'completed' not in data and not is_admin(acting_user_id):
+            cursor.close()
+            return jsonify({'error': 'Permissão negada. Apenas administradores podem editar tarefas.'}), 403
+        
         if 'completed' in data:
             cursor.execute("UPDATE tasks SET completed = %s WHERE id = %s", (data['completed'], task_id))
             action_text = "concluiu" if data['completed'] else "reabriu"
-            log_activity(acting_user_id, f"{action_text} a tarefa ID {task_id}.")
+            log_activity(acting_user_id, f"{action_text} a tarefa: '{current_title}'")
         else:
             assigned_to_id = data.get('assigned_to_id') or None
             due_date = data.get('due_date') or None
+            new_title = data.get('title')
+            
+            # --- MODIFICADO ---
+            category_id = data.get('category_id') or None
+            
+            # --- MODIFICADO --- Query atualizada
             cursor.execute(
-                "UPDATE tasks SET title = %s, description = %s, priority = %s, due_date = %s, assigned_to_id = %s WHERE id = %s",
-                (data.get('title'), data.get('description'), data.get('priority'), due_date, assigned_to_id, task_id)
+                "UPDATE tasks SET title = %s, description = %s, priority = %s, due_date = %s, assigned_to_id = %s, category_id = %s WHERE id = %s",
+                (new_title, data.get('description'), data.get('priority'), due_date, assigned_to_id, category_id, task_id)
             )
-            log_activity(acting_user_id, f"editou a tarefa ID {task_id} (novo título: '{data.get('title')}')")
+            log_activity(acting_user_id, f"editou a tarefa '{current_title}' (novo título: '{new_title}')")
             
         mysql.connection.commit()
         cursor.close()
@@ -528,6 +589,10 @@ def manage_task(task_id):
     if request.method == 'DELETE':
         data = request.json if request.is_json else {}
         acting_user_id = data.get('acting_user_id')
+
+        if not is_admin(acting_user_id):
+            cursor.close()
+            return jsonify({'error': 'Permissão negada. Apenas administradores podem excluir tarefas.'}), 403
         
         try:
             cursor.execute("DELETE FROM task_read_timestamps WHERE task_id = %s", (task_id,))
@@ -537,7 +602,8 @@ def manage_task(task_id):
         cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
         mysql.connection.commit()
         cursor.close()
-        log_activity(acting_user_id, f"excluiu a tarefa ID {task_id}.")
+        
+        log_activity(acting_user_id, f"excluiu a tarefa: '{current_title}'")
         return jsonify({'message': f'Tarefa {task_id} deletada.'})
 
 
@@ -611,8 +677,6 @@ def chat_messages():
         cursor.execute("INSERT INTO chat_messages (user_id, text) VALUES (%s, %s)", (user_id, data.get('text')))
         mysql.connection.commit()
         
-        # --- ATUALIZAÇÃO "NÃO LIDOS" ---
-        # Ao enviar uma mensagem, o usuário automaticamente "lê" o chat
         try:
             cursor.execute("UPDATE users SET chat_last_read_at = NOW() WHERE id = %s", (user_id,))
             mysql.connection.commit()
@@ -624,27 +688,19 @@ def chat_messages():
         return jsonify({'message': 'Mensagem enviada.'}), 201
 
 
-# --- ============================================ ---
 # --- NOVAS ROTAS DE NOTIFICAÇÃO DO CHAT GLOBAL ---
-# --- ============================================ ---
-
 @app.route('/api/chat/unread-count', methods=['GET'])
 def get_chat_unread_count():
-    """Verifica quantas mensagens de chat são 'não lidas' para um usuário."""
     user_id = request.args.get('user_id')
     if not user_id:
         return jsonify({'error': 'User ID é obrigatório.'}), 400
 
     cursor = mysql.connection.cursor()
     try:
-        # 1. Pega a última vez que o usuário leu o chat
         cursor.execute("SELECT chat_last_read_at FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
-        
-        # Se o usuário não existir ou for a primeira vez, usa a data atual
         last_read = user['chat_last_read_at'] if (user and user['chat_last_read_at']) else datetime.now()
 
-        # 2. Conta quantas mensagens no chat são MAIS NOVAS que a data de leitura
         cursor.execute(
             """SELECT COUNT(id) as unreadCount 
                FROM chat_messages 
@@ -664,7 +720,6 @@ def get_chat_unread_count():
 
 @app.route('/api/chat/mark-as-read', methods=['POST'])
 def mark_chat_as_read():
-    """Atualiza o 'chat_last_read_at' do usuário para agora."""
     user_id = request.json.get('user_id')
     if not user_id:
         return jsonify({'error': 'User ID é obrigatório.'}), 400
@@ -706,6 +761,30 @@ def admin_purge_chat():
         return jsonify({'error': 'Erro ao limpar o chat.'}), 500
 
 
+# --- ATUALIZAÇÃO: Nova Rota (PURGE ACTIVITY LOG) ---
+@app.route('/api/admin/activity-log/purge', methods=['DELETE'])
+def admin_purge_activity_log():
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("TRUNCATE TABLE activity_log")
+        mysql.connection.commit()
+        cursor.close()
+        
+        log_activity(admin_id, "executou a limpeza (PURGE) de todo o Log de Atividades.")
+        return jsonify({'message': 'Log de Atividades limpo com sucesso.'}), 200
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        print(f"Erro ao limpar o Log de Atividades: {e}")
+        return jsonify({'error': 'Erro ao limpar o Log de Atividades.'}), 500
+
+
 # --- ROTA DE LOG DE ATIVIDADES ---
 @app.route('/api/activity-log', methods=['GET'])
 def get_activity_log():
@@ -728,6 +807,39 @@ def get_activity_log():
             log_entry['username'] = "[Usuário Deletado]"
             
     return jsonify(logs)
+
+
+# --- Rota de Log de Atividades (LGPD) ---
+@app.route('/api/user/my-activity-log', methods=['GET'])
+def get_user_activity_log():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'ID de usuário é obrigatório.'}), 400
+        
+    cursor = mysql.connection.cursor()
+    try:
+        query = """
+            SELECT id, action_text, timestamp
+            FROM activity_log
+            WHERE user_id = %s
+            AND action_text LIKE 'concluiu a tarefa%%'
+            ORDER BY timestamp DESC
+            LIMIT 100
+        """
+        cursor.execute(query, (user_id,))
+        logs = cursor.fetchall()
+        cursor.close()
+        
+        for log_entry in logs:
+            if isinstance(log_entry.get('timestamp'), datetime):
+                log_entry['timestamp'] = log_entry['timestamp'].isoformat()
+                
+        return jsonify(logs), 200
+        
+    except Exception as e:
+        cursor.close()
+        print(f"Erro ao buscar log de atividades do usuário: {e}")
+        return jsonify({'error': 'Erro ao buscar seu log de atividades.'}), 500
 
 
 # --- ROTAS SSAP (Admin User Management) ---
@@ -760,10 +872,11 @@ def admin_delete_user(user_id):
         if not user:
             cursor.close()
             return jsonify({'error': 'Usuário não encontrado.'}), 404
-
-        # Limpa os dados de leitura do usuário deletado
+        
+        # --- MODIFICADO --- Adicionada limpeza da nova tabela de associação
+        cursor.execute("DELETE FROM user_categories WHERE user_id = %s", (user_id,))
+        
         cursor.execute("DELETE FROM task_read_timestamps WHERE user_id = %s", (user_id,))
-
         cursor.execute("UPDATE tasks SET creator_id = NULL WHERE creator_id = %s", (user_id,))
         cursor.execute("UPDATE tasks SET assigned_to_id = NULL WHERE assigned_to_id = %s", (user_id,))
         cursor.execute("DELETE FROM task_comments WHERE user_id = %s", (user_id,))
@@ -816,7 +929,177 @@ def admin_force_reset_password():
     })
 
 
-# --- ROTAS DA CENTRAL DE PRIVACIDADE (DPO) ---
+# --- ================================== ---
+# --- NOVO BLOCO: ROTAS DE CATEGORIAS (CRUD)
+# --- ================================== ---
+
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    # Rota pública para todos os usuários logados verem as categorias
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # --- ATUALIZAÇÃO: Adicionada contagem de tarefas ---
+        cursor.execute("""
+            SELECT 
+                tc.id, tc.name, tc.description, 
+                (SELECT COUNT(t.id) FROM tasks t WHERE t.category_id = tc.id) as task_count
+            FROM task_categories tc 
+            ORDER BY tc.name ASC
+        """)
+        # --- FIM DA ATUALIZAÇÃO ---
+        
+        categories = cursor.fetchall()
+        cursor.close()
+        return jsonify(categories)
+    except Exception as e:
+        print(f"Erro ao buscar categorias: {e}")
+        return jsonify({'error': 'Erro ao buscar categorias.'}), 500
+
+@app.route('/api/admin/categories', methods=['POST'])
+def create_category():
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    name = data.get('name')
+    
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+    if not name:
+        return jsonify({'error': 'O nome da categoria é obrigatório.'}), 400
+        
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("INSERT INTO task_categories (name, description) VALUES (%s, %s)", 
+                       (name, data.get('description')))
+        mysql.connection.commit()
+        
+        new_category_id = cursor.lastrowid
+        cursor.close()
+        
+        log_activity(admin_id, f"criou a categoria: '{name}' (ID: {new_category_id})")
+        return jsonify({'message': 'Categoria criada com sucesso.', 'id': new_category_id}), 201
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': f'Erro ao criar categoria: {str(e)}'}), 500
+
+@app.route('/api/admin/categories/<int:category_id>', methods=['PUT'])
+def update_category(category_id):
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    name = data.get('name')
+    
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+    if not name:
+        return jsonify({'error': 'O nome é obrigatório.'}), 400
+
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("UPDATE task_categories SET name = %s, description = %s WHERE id = %s", 
+                       (name, data.get('description'), category_id))
+        mysql.connection.commit()
+        cursor.close()
+        log_activity(admin_id, f"atualizou a categoria ID {category_id} (Novo nome: {name})")
+        return jsonify({'message': 'Categoria atualizada com sucesso.'})
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': f'Erro ao atualizar categoria: {str(e)}'}), 500
+
+@app.route('/api/admin/categories/<int:category_id>', methods=['DELETE'])
+def delete_category(category_id):
+    data = request.json if request.is_json else {}
+    admin_id = data.get('admin_user_id') # O ID do admin pode vir no corpo
+    
+    # Se não estiver no corpo, tente pegar dos args (para testes)
+    if not admin_id:
+        admin_id = request.args.get('admin_user_id')
+
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # --- MODIFICADO --- Deleta primeiro as associações
+        cursor.execute("DELETE FROM user_categories WHERE category_id = %s", (category_id,))
+        # (A coluna 'category_id' na tabela 'tasks' será definida como NULL automaticamente)
+        
+        cursor.execute("DELETE FROM task_categories WHERE id = %s", (category_id,))
+        mysql.connection.commit()
+        
+        if cursor.rowcount == 0:
+            cursor.close()
+            return jsonify({'error': 'Categoria não encontrada.'}), 404
+            
+        cursor.close()
+        log_activity(admin_id, f"deletou a categoria ID {category_id}.")
+        return jsonify({'message': 'Categoria deletada com sucesso.'})
+    except Exception as e:
+        mysql.connection.rollback()
+        return jsonify({'error': f'Erro ao deletar categoria: {str(e)}'}), 500
+
+
+# --- ================================== ---
+# --- NOVO BLOCO: ASSOCIAÇÃO DE CATEGORIAS (Admin)
+# --- ================================== ---
+
+@app.route('/api/admin/user/<int:user_id>/categories', methods=['GET'])
+def get_user_categories(user_id):
+    # (O user_id vem da URL)
+    # Precisamos verificar se quem *pergunta* é um admin
+    
+    acting_admin_id = request.args.get('admin_user_id')
+    if not is_admin(acting_admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    try:
+        cursor = mysql.connection.cursor()
+        # Pega apenas os IDs das categorias que o usuário já possui
+        cursor.execute("SELECT category_id FROM user_categories WHERE user_id = %s", (user_id,))
+        # Transforma a lista de dicts (ex: [{'category_id': 1}, ...]) em uma lista simples (ex: [1, 5, 7])
+        category_ids = [row['category_id'] for row in cursor.fetchall()]
+        cursor.close()
+        return jsonify(category_ids)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/user/<int:user_id>/categories', methods=['PUT'])
+def set_user_categories(user_id):
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    category_ids = data.get('category_ids', []) # Espera uma lista de IDs, ex: [1, 5, 7]
+
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+
+    cursor = mysql.connection.cursor()
+    try:
+        # 1. Apaga todas as associações antigas deste usuário
+        cursor.execute("DELETE FROM user_categories WHERE user_id = %s", (user_id,))
+        
+        # 2. Insere as novas associações (se a lista não estiver vazia)
+        if category_ids:
+            # Prepara os dados para uma inserção em massa
+            # Transforma [1, 5, 7] em [(user_id, 1), (user_id, 5), (user_id, 7)]
+            values_to_insert = [(user_id, cat_id) for cat_id in category_ids]
+            
+            query = "INSERT INTO user_categories (user_id, category_id) VALUES (%s, %s)"
+            cursor.executemany(query, values_to_insert)
+            
+        mysql.connection.commit()
+        cursor.close()
+        
+        log_activity(admin_id, f"atualizou as categorias para o usuário ID {user_id}.")
+        return jsonify({'message': 'Categorias do usuário atualizadas com sucesso.'})
+    except Exception as e:
+        mysql.connection.rollback()
+        cursor.close()
+        return jsonify({'error': f'Erro ao atualizar categorias: {str(e)}'}), 500
+
+
+# --- ================================================ ---
+# --- ATUALIZAÇÃO LGPD/TEXTO: ROTAS DA CENTRAL DE PRIVACIDADE (DPO)
+# --- ================================================ ---
 @app.route('/api/dpo-request', methods=['POST'])
 def submit_dpo_request():
     data = request.json
@@ -828,11 +1111,30 @@ def submit_dpo_request():
         return jsonify({'error': 'Dados incompletos.'}), 400
         
     try:
+        scheduled_date = None
+        # Se for uma solicitação de anonimização, agenda para 7 dias
+        if request_type == 'anonymization':
+            # Verifica se já existe uma solicitação pendente
+            cursor_check = mysql.connection.cursor()
+            cursor_check.execute(
+                "SELECT id FROM dpo_requests WHERE user_id = %s AND request_type = 'anonymization_request' AND status = 'pending'",
+                (user_id,)
+            )
+            if cursor_check.fetchone():
+                cursor_check.close()
+                # ATUALIZAÇÃO DE TEXTO
+                return jsonify({'message': 'Você já possui uma solicitação de exclusão pendente.'}), 200
+            cursor_check.close()
+            
+            request_type = 'anonymization_request' # Muda o tipo para ser específico
+            scheduled_date = datetime.now() + timedelta(days=7)
+            message = f"[Solicitação manual do usuário] {message}"
+
         cursor = mysql.connection.cursor()
         cursor.execute(
-            """INSERT INTO dpo_requests (user_id, request_type, message_text, status, created_at) 
-               VALUES (%s, %s, %s, 'pending', NOW())""",
-            (user_id, request_type, message)
+            """INSERT INTO dpo_requests (user_id, request_type, message_text, status, created_at, scheduled_for) 
+               VALUES (%s, %s, %s, 'pending', NOW(), %s)""",
+            (user_id, request_type, message, scheduled_date)
         )
         mysql.connection.commit()
         cursor.close()
@@ -852,14 +1154,21 @@ def get_dpo_requests():
         return jsonify({'error': 'Acesso negado.'}), 403
         
     cursor = mysql.connection.cursor()
+    
+    # --- INÍCIO DA CORREÇÃO ---
+    # Alterado de "JOIN users u" para "LEFT JOIN users u"
+    # Isso garante que as solicitações DPO de usuários deletados
+    # (usuários "órfãos") ainda sejam listadas.
     query = """
-        SELECT r.id, r.request_type, r.message_text, r.status, r.created_at, r.response_text, r.responded_at,
+        SELECT r.id, r.request_type, r.message_text, r.status, r.created_at, r.response_text, r.responded_at, r.scheduled_for,
                u.username AS user_username, a.username AS admin_username
         FROM dpo_requests r
-        JOIN users u ON r.user_id = u.id
+        LEFT JOIN users u ON r.user_id = u.id 
         LEFT JOIN users a ON r.responded_by_id = a.id
         ORDER BY r.status ASC, r.created_at DESC
     """
+    # --- FIM DA CORREÇÃO ---
+    
     cursor.execute(query)
     requests_list = cursor.fetchall()
     cursor.close()
@@ -867,8 +1176,29 @@ def get_dpo_requests():
     for req in requests_list:
         if isinstance(req.get('created_at'), datetime): req['created_at'] = req['created_at'].isoformat()
         if isinstance(req.get('responded_at'), datetime): req['responded_at'] = req['responded_at'].isoformat()
+        if isinstance(req.get('scheduled_for'), datetime): req['scheduled_for'] = req['scheduled_for'].isoformat()
             
     return jsonify(requests_list)
+
+@app.route('/api/admin/dpo-pending-count', methods=['GET'])
+def get_dpo_pending_count():
+    admin_id = request.args.get('admin_user_id')
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    cursor = mysql.connection.cursor()
+    try:
+        # Esta contagem (sem JOIN) está correta.
+        # Nós queremos contar solicitações órfãs.
+        cursor.execute("SELECT COUNT(id) as pendingCount FROM dpo_requests WHERE status = 'pending'")
+        result = cursor.fetchone()
+        cursor.close()
+        return jsonify(result), 200
+        
+    except Exception as e:
+        cursor.close()
+        print(f"Erro ao contar DPO pendentes: {e}")
+        return jsonify({'error': 'Erro ao contar solicitações.'}), 500
 
 @app.route('/api/admin/dpo-request/<int:req_id>', methods=['PUT'])
 def respond_dpo_request(req_id):
@@ -883,6 +1213,14 @@ def respond_dpo_request(req_id):
         
     try:
         cursor = mysql.connection.cursor()
+        
+        cursor.execute("SELECT request_type FROM dpo_requests WHERE id = %s", (req_id,))
+        req = cursor.fetchone()
+        # ATUALIZAÇÃO DE TEXTO
+        if req and req['request_type'] == 'anonymization_request':
+            cursor.close()
+            return jsonify({'error': 'Este tipo de solicitação deve ser executada, não respondida.'}), 400
+            
         cursor.execute(
             """UPDATE dpo_requests 
                SET status = 'answered', 
@@ -940,7 +1278,7 @@ def get_user_dpo_requests():
     cursor = mysql.connection.cursor()
     query = """
         SELECT r.id, r.request_type, r.message_text, r.status, r.created_at, 
-               r.response_text, r.responded_at, a.username AS admin_username
+               r.response_text, r.responded_at, r.scheduled_for, a.username AS admin_username
         FROM dpo_requests r
         LEFT JOIN users a ON r.responded_by_id = a.id
         WHERE r.user_id = %s
@@ -953,8 +1291,99 @@ def get_user_dpo_requests():
     for req in requests_list:
         if isinstance(req.get('created_at'), datetime): req['created_at'] = req['created_at'].isoformat()
         if isinstance(req.get('responded_at'), datetime): req['responded_at'] = req['responded_at'].isoformat()
+        if isinstance(req.get('scheduled_for'), datetime): req['scheduled_for'] = req['scheduled_for'].isoformat()
             
     return jsonify(requests_list)
+
+
+# --- ================================================ ---
+# --- ATUALIZAÇÃO LGPD/TEXTO: Rota de Execução de Exclusão
+# --- ================================================ ---
+@app.route('/api/admin/execute-anonymization', methods=['POST'])
+def admin_execute_anonymization():
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    request_id = data.get('request_id')
+    
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    cursor = mysql.connection.cursor()
+    try:
+        # 1. Encontra a solicitação e o ID do usuário alvo
+        cursor.execute(
+            "SELECT user_id, status FROM dpo_requests WHERE id = %s AND request_type = 'anonymization_request'", 
+            (request_id,)
+        )
+        dpo_req = cursor.fetchone()
+        
+        if not dpo_req:
+            cursor.close()
+            # ATUALIZAÇÃO DE TEXTO
+            return jsonify({'error': 'Solicitação de exclusão não encontrada.'}), 404
+            
+        if dpo_req['status'] == 'answered':
+            cursor.close()
+            return jsonify({'error': 'Esta solicitação já foi executada.'}), 400
+            
+        user_id_to_delete = dpo_req['user_id']
+        
+        # 2. Lógica de segurança (ex: último admin)
+        cursor.execute("SELECT role FROM users WHERE id = %s", (user_id_to_delete,))
+        user = cursor.fetchone()
+        if user and user['role'] == 'admin':
+            cursor.execute("SELECT COUNT(*) as admin_count FROM users WHERE role = 'admin'")
+            admin_count = cursor.fetchone()['admin_count']
+            if admin_count <= 1:
+                cursor.close()
+                return jsonify({'error': 'Execução falhou: Este é o único administrador.'}), 403
+
+        # 3. Executa a anonimização
+        anon_username = f"usuario_anonimizado_{user_id_to_delete}"
+        anon_email = f"deleted_{user_id_to_delete}@taskflow.up"
+        null_salt = create_salt() 
+        null_pass = hash_password(secrets.token_hex(32), null_salt)
+        
+        cursor.execute(
+            """UPDATE users 
+               SET username = %s, email = %s, job_title = 'Ex-Funcionário', 
+                   password_hash = %s, salt = %s, needs_password_reset = 1
+               WHERE id = %s""",
+            (anon_username, anon_email, null_pass, null_salt, user_id_to_delete)
+        )
+        
+        cursor.execute("UPDATE task_comments SET text = '[comentário removido pelo usuário]' WHERE user_id = %s", (user_id_to_delete,))
+        cursor.execute("UPDATE chat_messages SET text = '[mensagem removido pelo usuário]' WHERE user_id = %s", (user_id_to_delete,))
+        cursor.execute("DELETE FROM task_read_timestamps WHERE user_id = %s", (user_id_to_delete,))
+        
+        # --- MODIFICADO --- Deleta associações de categoria
+        cursor.execute("DELETE FROM user_categories WHERE user_id = %s", (user_id_to_delete,))
+        
+        # 4. Atualiza a solicitação DPO para "answered"
+        # ATUALIZAÇÃO DE TEXTO
+        response_text = f"Conta excluída (anonimizada) com sucesso pelo Admin ID {admin_id}."
+        cursor.execute(
+            """UPDATE dpo_requests 
+               SET status = 'answered', response_text = %s, respondido_by_id = %s, responded_at = NOW()
+               WHERE id = %s""",
+            (response_text, admin_id, request_id)
+        )
+        
+        mysql.connection.commit()
+        
+        # ATUALIZAÇÃO DE TEXTO
+        log_activity(admin_id, f"executou a exclusão (anonimização) para o usuário ID {user_id_to_delete} (Solicitação DPO ID {request_id}).") 
+        
+        cursor.close()
+        # ATUALIZAÇÃO DE TEXTO
+        return jsonify({'message': 'Conta excluída (anonimizada) com sucesso.'}), 200
+        
+    except Exception as e:
+        mysql.connection.rollback()
+        cursor.close()
+        print(f"Erro ao executar exclusão: {e}") # ATUALIZAÇÃO DE TEXTO
+        return jsonify({'error': f'Erro ao processar exclusão: {str(e)}'}), 500
+# --- Fim da Nova Rota ---
 
 
 # --- ROTAS DE IMPERSONAÇÃO (SSO) ---
