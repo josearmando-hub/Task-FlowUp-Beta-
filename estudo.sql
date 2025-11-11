@@ -120,3 +120,41 @@ CREATE TABLE `activity_log` (
   
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
 );
+ALTER TABLE dpo_requests
+ADD COLUMN scheduled_for DATETIME NULL DEFAULT NULL;
+
+ALTER TABLE dpo_requests
+ADD COLUMN respondido_by_id INT NULL DEFAULT NULL,
+ADD CONSTRAINT fk_dpo_admin
+    FOREIGN KEY (respondido_by_id) 
+    REFERENCES users(id)
+    ON DELETE SET NULL;
+    
+    -- 1. Tabela para as Categorias (Pastas)
+CREATE TABLE task_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT
+);
+
+-- 2. Tabela para associar Usuários a Categorias (Muitos-para-Muitos)
+CREATE TABLE user_categories (
+    user_id INT NOT NULL,
+    category_id INT NOT NULL,
+    PRIMARY KEY (user_id, category_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES task_categories(id) ON DELETE CASCADE
+);
+
+-- 3. Modificação da tabela 'tasks'
+ALTER TABLE tasks
+ADD COLUMN category_id INT NULL,
+ADD CONSTRAINT fk_task_category
+    FOREIGN KEY (category_id)
+    REFERENCES task_categories(id)
+    ON DELETE SET NULL; -- Se uma categoria for deletada, a tarefa fica 'sem categoria'
+    
+    -- 1. Tabela para as Categorias (Pastas)
+    
+    
+
