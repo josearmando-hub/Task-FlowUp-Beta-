@@ -5,6 +5,7 @@ import os
 import secrets
 from flask_cors import CORS
 from datetime import date, datetime, timedelta 
+import pyotp # <-- ATUALIZAÇÃO: Importação necessária
 
 app = Flask(__name__)
 CORS(app)
@@ -136,7 +137,13 @@ def login():
     data = request.json
     username, password = data.get('username'), data.get('password')
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT id, username, password_hash, salt, role, email, needs_password_reset, job_title FROM users WHERE username = %s", (username,))
+    
+    # --- ATUALIZAÇÃO: Seleciona is_totp_enabled ---
+    cursor.execute(
+        "SELECT id, username, password_hash, salt, role, email, needs_password_reset, job_title, is_totp_enabled "
+        "FROM users WHERE username = %s", 
+        (username,)
+    )
     user_row = cursor.fetchone()
     cursor.close()
 
@@ -166,6 +173,12 @@ def login():
     else:
         return jsonify({'error': 'Senha incorreta.'}), 401
     
+    # --- ATUALIZAÇÃO: Checagem 2FA ---
+    if user_row['is_totp_enabled']:
+        # 2FA está ativo. Não logue o usuário, peça o código.
+        return jsonify({'2fa_required': True}), 200
+    # --- Fim da Atualização ---
+
     user_data = {
         'id': user_row['id'],
         'username': user_row['username'],
@@ -178,6 +191,54 @@ def login():
     log_activity(user_data['id'], f"fez login.")
 
     return jsonify({'message': 'Login bem-sucedido.', 'user': user_data}), 200
+
+
+# --- ================================== ---
+# --- ATUALIZAÇÃO: Nova Rota de Login 2FA
+# --- ================================== ---
+@app.route('/api/login/2fa', methods=['POST'])
+def login_2fa():
+    data = request.json
+    username = data.get('username')
+    totp_code = data.get('totp_code')
+
+    if not username or not totp_code:
+        return jsonify({'error': 'Nome de usuário e código 2FA são obrigatórios.'}), 400
+
+    cursor = mysql.connection.cursor()
+    cursor.execute(
+        "SELECT id, username, role, email, needs_password_reset, job_title, totp_secret "
+        "FROM users WHERE username = %s", (username,)
+    )
+    user_row = cursor.fetchone()
+
+    if not user_row:
+        cursor.close()
+        return jsonify({'error': 'Usuário não encontrado.'}), 404
+    
+    if not user_row['totp_secret']:
+        cursor.close()
+        return jsonify({'error': '2FA não está configurado para este usuário.'}), 400
+
+    totp = pyotp.TOTP(user_row['totp_secret'])
+    if not totp.verify(totp_code):
+        cursor.close()
+        return jsonify({'error': 'Código 2FA inválido.'}), 401
+
+    # Código 2FA válido, prossiga com o login
+    cursor.close()
+    user_data = {
+        'id': user_row['id'],
+        'username': user_row['username'],
+        'email': user_row['email'],
+        'role': user_row['role'],
+        'jobTitle': user_row['job_title'],
+        'needsPasswordReset': bool(user_row['needs_password_reset'])
+    }
+    
+    log_activity(user_data['id'], f"fez login com 2FA.")
+    return jsonify({'message': 'Login 2FA bem-sucedido.', 'user': user_data}), 200
+# --- Fim da Nova Rota ---
 
 
 @app.route('/api/forgot-password', methods=['POST'])
@@ -327,12 +388,25 @@ def delete_self_account():
 @app.route('/api/user/<int:user_id>', methods=['GET'])
 def get_user_details(user_id):
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT id, username, email, role, job_title FROM users WHERE id = %s", (user_id,))
+    
+    # --- ATUALIZAÇÃO: Seleciona is_totp_enabled ---
+    cursor.execute(
+        "SELECT id, username, email, role, job_title, is_totp_enabled "
+        "FROM users WHERE id = %s", 
+        (user_id,)
+    )
     user = cursor.fetchone()
     cursor.close()
+    
     if not user:
         return jsonify({'error': 'Usuário não encontrado.'}), 404
+    
+    # --- ATUALIZAÇÃO: Converte o booleano para o JS ---
+    user['is_totp_enabled'] = bool(user['is_totp_enabled'])
+    
     return jsonify(user)
+# --- Fim da Atualização ---
+
 
 @app.route('/api/user/<int:user_id>', methods=['PUT'])
 def update_user_profile(user_id):
@@ -930,7 +1004,7 @@ def admin_force_reset_password():
 
 
 # --- ================================== ---
-# --- NOVO BLOCO: ROTAS DE CATEGORIAS (CRUD)
+# --- ATUALIZAÇÃO: ROTAS DE CATEGORIAS (CRUD)
 # --- ================================== ---
 
 @app.route('/api/categories', methods=['GET'])
@@ -939,11 +1013,12 @@ def get_categories():
     try:
         cursor = mysql.connection.cursor()
         
-        # --- ATUALIZAÇÃO: Adicionada contagem de tarefas ---
+        # --- ATUALIZAÇÃO: Adicionada contagem de tarefas e usuários ---
         cursor.execute("""
             SELECT 
                 tc.id, tc.name, tc.description, 
-                (SELECT COUNT(t.id) FROM tasks t WHERE t.category_id = tc.id) as task_count
+                (SELECT COUNT(t.id) FROM tasks t WHERE t.category_id = tc.id) as task_count,
+                (SELECT COUNT(uc.user_id) FROM user_categories uc WHERE uc.category_id = tc.id) as user_count
             FROM task_categories tc 
             ORDER BY tc.name ASC
         """)
@@ -1095,6 +1170,84 @@ def set_user_categories(user_id):
         mysql.connection.rollback()
         cursor.close()
         return jsonify({'error': f'Erro ao atualizar categorias: {str(e)}'}), 500
+
+
+# --- ================================== ---
+# --- ATUALIZAÇÃO: NOVAS ROTAS DE ASSOCIAÇÃO (Inverso)
+# --- ================================== ---
+
+@app.route('/api/admin/category/<int:category_id>/users', methods=['GET'])
+def get_category_users(category_id):
+    """
+    Busca todos os funcionários e indica quais estão associados a UMA categoria específica.
+    """
+    acting_admin_id = request.args.get('admin_user_id')
+    if not is_admin(acting_admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+        
+    try:
+        cursor = mysql.connection.cursor()
+        # Seleciona todos os funcionários (role='funcionario')
+        # E usa um LEFT JOIN para verificar se eles estão na tabela de associação
+        # para a categoria específica que estamos perguntando (category_id = %s)
+        query = """
+            SELECT 
+                u.id, 
+                u.username,
+                u.job_title,
+                (uc.user_id IS NOT NULL) AS is_associated
+            FROM users u
+            LEFT JOIN user_categories uc ON u.id = uc.user_id AND uc.category_id = %s
+            WHERE u.role = 'funcionario'
+            ORDER BY u.username ASC
+        """
+        cursor.execute(query, (category_id,))
+        users_list = cursor.fetchall()
+        
+        # Converte o 'is_associated' (0 ou 1) para booleano
+        for user in users_list:
+            user['is_associated'] = bool(user['is_associated'])
+            
+        cursor.close()
+        return jsonify(users_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/category/<int:category_id>/users', methods=['PUT'])
+def set_category_users(category_id):
+    """
+    Define quais usuários estão associados a UMA categoria específica.
+    """
+    data = request.json
+    admin_id = data.get('admin_user_id')
+    user_ids = data.get('user_ids', []) # Espera uma lista de IDs de *usuários*, ex: [1, 5, 7]
+
+    if not is_admin(admin_id):
+        return jsonify({'error': 'Acesso negado.'}), 403
+
+    cursor = mysql.connection.cursor()
+    try:
+        # 1. Apaga todas as associações antigas DESTA CATEGORIA
+        cursor.execute("DELETE FROM user_categories WHERE category_id = %s", (category_id,))
+        
+        # 2. Insere as novas associações (se a lista não estiver vazia)
+        if user_ids:
+            # Prepara os dados para inserção em massa
+            # Transforma [1, 5, 7] em [(1, category_id), (5, category_id), (7, category_id)]
+            values_to_insert = [(user_id, category_id) for user_id in user_ids]
+            
+            query = "INSERT INTO user_categories (user_id, category_id) VALUES (%s, %s)"
+            cursor.executemany(query, values_to_insert)
+            
+        mysql.connection.commit()
+        cursor.close()
+        
+        log_activity(admin_id, f"atualizou os usuários para a categoria ID {category_id}.")
+        return jsonify({'message': 'Usuários da categoria atualizados com sucesso.'})
+    except Exception as e:
+        mysql.connection.rollback()
+        cursor.close()
+        return jsonify({'error': f'Erro ao atualizar usuários da categoria: {str(e)}'}), 500
 
 
 # --- ================================================ ---
@@ -1347,7 +1500,8 @@ def admin_execute_anonymization():
         cursor.execute(
             """UPDATE users 
                SET username = %s, email = %s, job_title = 'Ex-Funcionário', 
-                   password_hash = %s, salt = %s, needs_password_reset = 1
+                   password_hash = %s, salt = %s, needs_password_reset = 1,
+                   is_totp_enabled = 0, totp_secret = NULL
                WHERE id = %s""",
             (anon_username, anon_email, null_pass, null_salt, user_id_to_delete)
         )
@@ -1444,6 +1598,108 @@ def impersonate_login():
     }
     
     return jsonify({'message': 'Impersonação bem-sucedida.', 'user': user_data}), 200
+
+
+# --- ================================== ---
+# --- ATUALIZAÇÃO: Novas Rotas 2FA
+# --- ================================== ---
+
+@app.route('/api/user/totp-setup', methods=['POST'])
+def totp_setup():
+    user_id = request.json.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'ID de usuário é obrigatório.'}), 400
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT username, email FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.close()
+        return jsonify({'error': 'Usuário não encontrado.'}), 404
+
+    # Gera um novo segredo
+    secret = pyotp.random_base32()
+    
+    # Salva o segredo no banco (ainda não está 'enabled')
+    cursor.execute("UPDATE users SET totp_secret = %s, is_totp_enabled = 0 WHERE id = %s", (secret, user_id))
+    mysql.connection.commit()
+    cursor.close()
+
+    # Gera o URI para o QR Code
+    provisioning_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=user['email'] or user['username'], 
+        issuer_name="Task FlowUp"
+    )
+    
+    return jsonify({
+        'message': 'Segredo 2FA gerado. Por favor, verifique.',
+        'secret': secret,
+        'provisioning_uri': provisioning_uri
+    }), 200
+
+@app.route('/api/user/totp-verify-setup', methods=['POST'])
+def totp_verify_setup():
+    data = request.json
+    user_id = data.get('user_id')
+    totp_code = data.get('totp_code')
+
+    if not user_id or not totp_code:
+        return jsonify({'error': 'ID de usuário e código 2FA são obrigatórios.'}), 400
+    
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT totp_secret FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+
+    if not user or not user['totp_secret']:
+        cursor.close()
+        return jsonify({'error': 'Segredo 2FA não encontrado. Tente a configuração novamente.'}), 404
+    
+    totp = pyotp.TOTP(user['totp_secret'])
+    if not totp.verify(totp_code):
+        cursor.close()
+        return jsonify({'error': 'Código 2FA inválido.'}), 401
+    
+    # Código válido! Ativa o 2FA
+    cursor.execute("UPDATE users SET is_totp_enabled = 1 WHERE id = %s", (user_id,))
+    mysql.connection.commit()
+    cursor.close()
+    
+    log_activity(user_id, "ativou o 2FA em sua conta.")
+    return jsonify({'message': '2FA ativado com sucesso!'}), 200
+
+@app.route('/api/user/totp-disable', methods=['POST'])
+def totp_disable():
+    data = request.json
+    user_id = data.get('user_id')
+    password = data.get('password')
+
+    if not user_id or not password:
+        return jsonify({'error': 'ID de usuário e senha são obrigatórios.'}), 400
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT password_hash, salt FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        cursor.close()
+        return jsonify({'error': 'Usuário não encontrado.'}), 404
+    
+    # Verifica a senha do usuário
+    is_new_hash_match = hash_password(password, user['salt']) == user['password_hash']
+    is_legacy_hash_match = hash_password_legacy(password, user['salt']) == user['password_hash']
+
+    if not is_new_hash_match and not is_legacy_hash_match:
+        cursor.close()
+        return jsonify({'error': 'Senha incorreta.'}), 401
+
+    # Senha correta, desativa o 2FA
+    cursor.execute("UPDATE users SET is_totp_enabled = 0, totp_secret = NULL WHERE id = %s", (user_id,))
+    mysql.connection.commit()
+    cursor.close()
+    
+    log_activity(user_id, "desativou o 2FA em sua conta.")
+    return jsonify({'message': '2FA desativado com sucesso.'}), 200
+# --- Fim das Novas Rotas 2FA ---
 
 
 if __name__ == '__main__':
