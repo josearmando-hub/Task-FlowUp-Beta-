@@ -28,7 +28,19 @@ body { font-family: 'Poppins', sans-serif; color: var(--text-color); margin: 0; 
 #content-wrapper { flex-grow: 1; transition: margin-left 0.3s ease; display: flex; flex-direction: column; }
 
 /* --- Barra de Navegação Lateral (Sidebar) --- */
-#sidebar { width: 260px; min-height: 100vh; background: var(--sidebar-bg); color: var(--sidebar-text); position: fixed; top: 0; left: 0; z-index: 1000; transition: all 0.3s ease; display: flex; flex-direction: column; }
+#sidebar { 
+    width: 260px; 
+    height: 100vh; /* <-- ATUALIZAÇÃO: Trocado de 'min-height' para 'height' */
+    background: var(--sidebar-bg); 
+    color: var(--sidebar-text); 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    z-index: 1000; 
+    transition: all 0.3s ease; 
+    display: flex; 
+    flex-direction: column; 
+}
 .sidebar-header { padding: 30px 20px; text-align: center; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; }
 .sidebar-logo { 
     height: 70px; 
@@ -44,7 +56,35 @@ body { font-family: 'Poppins', sans-serif; color: var(--text-color); margin: 0; 
     opacity: 1; 
     transition: opacity 0.3s ease; 
 }
-#sidebar .components { padding: 20px 0; flex-grow: 1; }
+
+/* --- ATUALIZAÇÃO --- */
+/* Esta seção agora vai rolar se o conteúdo for muito grande */
+#sidebar .components { 
+    padding: 20px 0; 
+    flex-grow: 1; /* Pede para ocupar o espaço que sobra */
+    overflow-y: auto; /* Adiciona a barra de rolagem SÓ se necessário */
+}
+
+/* --- NOVO: Estilização da Barra de Rolagem (para Chrome, Edge, Safari) --- */
+#sidebar .components::-webkit-scrollbar {
+    width: 10px;
+}
+#sidebar .components::-webkit-scrollbar-track {
+    background: var(--sidebar-bg); /* Fundo da trilha (mesma cor da sidebar) */
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+#sidebar .components::-webkit-scrollbar-thumb {
+    background: var(--secondary-color); /* Cor da barra de rolagem */
+    border-radius: 10px;
+    border: 2px solid var(--sidebar-bg); /* Cria uma borda com a cor da sidebar */
+}
+#sidebar .components::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color); /* Cor ao passar o mouse */
+}
+/* --- FIM DA ATUALIZAÇÃO --- */
+
+
 #sidebar ul li a { padding: 15px 25px; display: flex; align-items: center; color: var(--sidebar-text); font-size: 1rem; font-weight: 500; text-decoration: none; transition: all 0.2s ease; border-left: 3px solid transparent; }
 #sidebar ul li a:hover { color: var(--sidebar-text-hover); background: rgba(255, 255, 255, 0.05); border-left: 3px solid var(--secondary-color); }
 #sidebar ul li.active > a { color: white; background: var(--sidebar-active-bg); }
