@@ -1,37 +1,149 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 :root {
-    --primary-color: #6a11cb;
-    --secondary-color: #2575fc;
-    --background-color: #f0f2f5;
-    --form-bg-color: #ffffff;
-    --text-color: #333;
-    --light-text-color: #6c757d;
-    --border-color: #dee2e6;
-    --error-color: #dc3545;
-    --success-color: #28a745; /* Novo: Cor verde de sucesso */
-    --warning-color: #ffc107; /* Novo: Cor de aviso */
-    --sidebar-bg: #1e293b;
-    --sidebar-text: #cbd5e1;
-    --sidebar-text-hover: #ffffff;
-    --sidebar-active-bg: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    /* --- PALETA NEOBRUTALISTA --- */
+    --primary-color: #10b981; /* Verde (Mantido) */
+    --secondary-color: #0ea5e9; /* Azul (Mantido) */
     
-    /* Sombra para o logo no LOGIN (mais fraca/suave) */
+    /* MODIFICAÇÃO: Fundo principal (Ciano claro - um pouco mais forte) */
+    --background-color: #e0ffff; 
+    
+    /* Cor dos painéis (Branco) */
+    --form-bg-color: #ffffff; 
+    
+    /* Cores de Texto (Alto Contraste) */
+    --text-color: #111111; /* Preto puro */
+    --light-text-color: #444444; /* Cinza escuro */
+    
+    /* Borda e Sombra Padrão (Preto) */
+    --border-color: #111111; 
+    
+    /* Cores de Status */
+    --error-color: #dc3545; 
+    --success-color: #10b981; 
+    --warning-color: #f59e0b; /* Amarelo (Usaremos como acento) */
+    
+    /* Sidebar (Branca) */
+    --sidebar-bg: #ffffff;
+    --sidebar-text: #111111; /* Texto preto */
+    --sidebar-text-hover: var(--primary-color); /* Hover Verde */
+    
+    /* Fundo do item ativo (Acento Amarelo) */
+    --sidebar-active-bg: var(--warning-color); 
+    
+    /* Sombras (Mantidas para o logo) */
     --logo-shadow-auth: 0 4px 8px rgba(0, 0, 0, 0.2); 
-
-    /* Sombra para o logo na SIDEBAR (mais forte, no fundo escuro) */
-    --logo-shadow-sidebar: 0 3px 6px rgba(0, 0, 0, 0.7); 
+    --logo-shadow-sidebar: 0 3px 6px rgba(0, 0, 0, 0.1); 
 }
 
-body { font-family: 'Poppins', sans-serif; color: var(--text-color); margin: 0; background-color: var(--background-color); }
+/* --- ATUALIZAÇÃO: Fundo do Body --- */
+body { 
+    font-family: 'Poppins', sans-serif; 
+    color: var(--text-color); /* Texto padrão escuro */
+    margin: 0; 
+    background-color: var(--background-color); /* MODIFICAÇÃO: Cor de fundo ciano claro aplicada */
+}
+
+/* --- ATUALIZAÇÃO: Estilo de Inputs (Neobrutalism) --- */
+.form-control, .form-select {
+    background-color: #ffffff;
+    color: var(--text-color);
+    border: 2px solid var(--border-color); /* Borda preta grossa */
+    border-radius: 8px; /* Cantos suaves */
+    box-shadow: none; /* Sem sombra padrão */
+    transition: all 0.1s ease-out;
+}
+.form-control:focus, .form-select:focus {
+    background-color: #ffffff;
+    color: var(--text-color);
+    border-color: var(--primary-color); /* Borda verde no foco */
+    box-shadow: 3px 3px 0px var(--primary-color); /* Sombra nítida no foco */
+}
+.form-control::placeholder {
+    color: var(--light-text-color);
+    opacity: 0.7;
+}
+.input-group-text {
+    background-color: #f8f9fa;
+    border: 2px solid var(--border-color);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    color: var(--light-text-color);
+}
+.input-group > .form-control {
+    border-left: none;
+}
+
+/* --- ATUALIZAÇÃO: Estilo de Botões (Neobrutalism) --- */
+.btn {
+    border: 2px solid var(--text-color);
+    border-radius: 8px;
+    font-weight: 600;
+    color: var(--text-color);
+    box-shadow: 3px 3px 0px var(--text-color);
+    transition: all 0.1s ease-out;
+}
+.btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0px var(--text-color);
+    color: var(--text-color);
+}
+.btn:active, .btn:focus {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0px var(--text-color);
+    color: var(--text-color);
+}
+.btn-primary {
+    background-color: var(--primary-color);
+    color: #ffffff; /* Texto branco no botão verde */
+}
+.btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+    background-color: var(--primary-color);
+    color: #ffffff;
+}
+.btn-danger {
+    background-color: var(--error-color);
+    color: #ffffff;
+}
+.btn-danger:hover, .btn-danger:active, .btn-danger:focus {
+    background-color: var(--error-color);
+    color: #ffffff;
+}
+.btn-secondary {
+    background-color: #ffffff;
+}
+.btn-secondary:hover, .btn-secondary:active, .btn-secondary:focus {
+    background-color: #f8f9fa;
+}
+
+
+/* --- ATUALIZAÇÃO: Modais (Neobrutalism) --- */
+.modal-content {
+    background-color: var(--form-bg-color);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 5px 5px 0px var(--text-color);
+    color: var(--text-color);
+}
+.modal-header {
+    border-bottom: 2px solid var(--border-color);
+}
+.modal-footer {
+    border-top: 2px solid var(--border-color);
+}
+.btn-close {
+    filter: none; 
+}
+
 .app-container { display: flex; width: 100%; min-height: 100vh; }
 #content-wrapper { flex-grow: 1; transition: margin-left 0.3s ease; display: flex; flex-direction: column; }
 
 /* --- Barra de Navegação Lateral (Sidebar) --- */
 #sidebar { 
     width: 260px; 
-    height: 100vh; /* <-- ATUALIZAÇÃO: Trocado de 'min-height' para 'height' */
-    background: var(--sidebar-bg); 
+    height: 100vh; 
+    background: var(--sidebar-bg); /* Sidebar Branca */
+    border-right: 2px solid var(--border-color); /* Borda preta grossa */
     color: var(--sidebar-text); 
     position: fixed; 
     top: 0; 
@@ -40,58 +152,103 @@ body { font-family: 'Poppins', sans-serif; color: var(--text-color); margin: 0; 
     transition: all 0.3s ease; 
     display: flex; 
     flex-direction: column; 
+    box-shadow: none; /* Sem sombra */
 }
-.sidebar-header { padding: 30px 20px; text-align: center; background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; }
+.sidebar-header { 
+    padding: 30px 20px; 
+    text-align: center; 
+    background: #ffffff;
+    border-bottom: 2px solid var(--border-color);
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+}
+
+/* --- MODIFICAÇÃO SOLICITADA --- */
 .sidebar-logo { 
-    height: 70px; 
-    width: 70px; 
-    margin-right: 15px; 
+    height: 130px; /* Aumentado */
+    width: 130px; /* Aumentado */
+    margin-right: 0; /* Removido (era 15px) */
     transition: all 0.3s ease; 
     filter: drop-shadow(var(--logo-shadow-sidebar)); 
 }
 .sidebar-title { 
     font-size: 1.2rem; 
     font-weight: 700; 
-    color: white; 
+    color: var(--text-color); /* Texto do título escuro */
     opacity: 1; 
     transition: opacity 0.3s ease; 
+    display: none; /* Adicionado para ocultar o texto */
 }
+/* --- FIM DA MODIFICAÇÃO --- */
 
-/* --- ATUALIZAÇÃO --- */
-/* Esta seção agora vai rolar se o conteúdo for muito grande */
 #sidebar .components { 
     padding: 20px 0; 
-    flex-grow: 1; /* Pede para ocupar o espaço que sobra */
-    overflow-y: auto; /* Adiciona a barra de rolagem SÓ se necessário */
+    flex-grow: 1; 
+    overflow-y: auto; 
 }
 
-/* --- NOVO: Estilização da Barra de Rolagem (para Chrome, Edge, Safari) --- */
+/* Estilização da Barra de Rolagem */
 #sidebar .components::-webkit-scrollbar {
     width: 10px;
 }
 #sidebar .components::-webkit-scrollbar-track {
-    background: var(--sidebar-bg); /* Fundo da trilha (mesma cor da sidebar) */
+    background: #ffffff;
     margin-top: 5px;
     margin-bottom: 5px;
 }
 #sidebar .components::-webkit-scrollbar-thumb {
-    background: var(--secondary-color); /* Cor da barra de rolagem */
+    background: var(--border-color); 
     border-radius: 10px;
-    border: 2px solid var(--sidebar-bg); /* Cria uma borda com a cor da sidebar */
+    border: 2px solid #ffffff; 
 }
 #sidebar .components::-webkit-scrollbar-thumb:hover {
-    background: var(--primary-color); /* Cor ao passar o mouse */
+    background: var(--light-text-color); 
 }
-/* --- FIM DA ATUALIZAÇÃO --- */
 
-
-#sidebar ul li a { padding: 15px 25px; display: flex; align-items: center; color: var(--sidebar-text); font-size: 1rem; font-weight: 500; text-decoration: none; transition: all 0.2s ease; border-left: 3px solid transparent; }
-#sidebar ul li a:hover { color: var(--sidebar-text-hover); background: rgba(255, 255, 255, 0.05); border-left: 3px solid var(--secondary-color); }
-#sidebar ul li.active > a { color: white; background: var(--sidebar-active-bg); }
-#sidebar ul li a i { font-size: 1.4rem; margin-right: 15px; min-width: 30px; text-align: center; }
-.logout-section { padding: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+#sidebar ul li a { 
+    padding: 15px 25px; 
+    display: flex; 
+    align-items: center; 
+    color: var(--sidebar-text); 
+    font-size: 1rem; 
+    font-weight: 500; 
+    text-decoration: none; 
+    transition: all 0.2s ease; 
+    border-left: 3px solid transparent; 
+}
+#sidebar ul li a:hover { 
+    color: var(--sidebar-text-hover); /* Texto Verde no Hover */
+    background: #f0f0f0; /* Cinza claro no hover */
+    border-left: 3px solid var(--secondary-color); 
+}
+#sidebar ul li.active > a { 
+    color: var(--text-color); /* Texto Preto no Ativo */
+    font-weight: 600;
+    background: var(--sidebar-active-bg); /* Fundo Amarelo */
+    border-left: 3px solid var(--text-color); /* Borda preta */
+}
+#sidebar ul li a i { 
+    font-size: 1.4rem; 
+    margin-right: 15px; 
+    min-width: 30px; 
+    text-align: center; 
+}
+.logout-section { padding: 0; border-top: 2px solid var(--border-color); }
 body.sidebar-collapsed #sidebar { width: 80px; }
 body.sidebar-collapsed .sidebar-title, body.sidebar-collapsed #sidebar ul li a span { display: none; }
+
+/* --- MODIFICAÇÃO: Correção do Botão de Sair (e outros ícones) no Colapso --- */
+body.sidebar-collapsed #sidebar ul li a {
+    padding-left: 0;
+    padding-right: 0;
+    justify-content: center; /* Centraliza o ícone */
+}
+body.sidebar-collapsed #sidebar ul li a i {
+    margin-right: 0; /* Remove a margem do ícone para centralização correta */
+}
+/* --- FIM DA MODIFICAÇÃO --- */
+
 body.sidebar-collapsed .sidebar-logo { margin-right: 0; height: 50px; width: 50px; } 
 body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 #content-wrapper { margin-left: 260px; }
@@ -99,34 +256,41 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 /* --- Banner de Impersonação --- */
 #impersonation-banner {
     background-color: var(--warning-color);
-    color: #333;
-    font-weight: 500;
+    color: var(--text-color); /* Texto preto */
+    font-weight: 600;
     padding: 10px 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     z-index: 1000;
+    border-bottom: 2px solid var(--border-color);
 }
 #impersonation-banner .btn-light {
     font-weight: 600;
-    border: 1px solid #555;
+    border: 2px solid var(--border-color);
     font-size: 0.85rem;
+    box-shadow: 2px 2px 0px var(--text-color);
 }
 
-/* --- Cabeçalho Superior com Busca --- */
-.app-header { background: #fff; padding: 10px 25px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 999; }
+/* --- Cabeçalho Superior --- */
+.app-header { 
+    background: #fff; 
+    padding: 10px 25px; 
+    box-shadow: none; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    position: sticky; 
+    top: 0; 
+    z-index: 999; 
+    border-bottom: 2px solid var(--border-color);
+}
 .header-left { display: flex; align-items: center; gap: 15px; }
 #sidebar-toggle { font-size: 1.5rem; color: var(--light-text-color); background: transparent; border: none; }
 .header-search-container { width: 350px; }
-.header-search-container .form-control { border-radius: 20px; }
-
-/* Container da Direita no Cabeçalho */
-.header-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
+.header-search-container .form-control { border-radius: 8px; }
+.header-right { display: flex; align-items: center; gap: 20px; }
 
 /* Botão de Adição Rápida */
 #quick-add-task-btn {
@@ -138,7 +302,6 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 #quick-add-task-btn i {
     line-height: 1;
@@ -147,7 +310,6 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 #header-user-info { font-weight: 500; }
 #main-content { padding: 25px; flex-grow: 1; }
 
-/* --- Subcabeçalho do Conteúdo --- */
 .content-header {
     display: flex;
     justify-content: space-between;
@@ -159,11 +321,37 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 }
 
 /* --- Container de Autenticação (Login/Register) --- */
-.auth-container { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 100vh; padding: 20px; }
-.auth-wrapper { display: flex; width: 100%; max-width: 1000px; background-color: var(--form-bg-color); border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); overflow: hidden; }
+.auth-container { 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    width: 100%; 
+    min-height: 100vh; 
+    padding: 20px; 
+}
+.auth-wrapper { 
+    display: flex; 
+    width: 100%; 
+    max-width: 1000px; 
+    background-color: var(--form-bg-color); 
+    border-radius: 20px; 
+    box-shadow: 5px 5px 0px var(--text-color);
+    border: 2px solid var(--border-color);
+    overflow: hidden; 
+}
 
-/* --- Seção de Boas-Vindas (Fundo Gradiente) --- */
-.welcome-section { background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; padding: 60px 40px; width: 45%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+/* Seção de Boas-Vindas (Fundo Gradiente) */
+.welcome-section { 
+    background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); 
+    color: white; 
+    padding: 60px 40px; 
+    width: 45%; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: center; 
+    text-align: center; 
+}
 .logo-img { 
     max-width: 250px; 
     margin-bottom: 1.5rem; 
@@ -175,8 +363,17 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     opacity: 0.9;
     color: #f8f8f8; 
 }
-.form-section { width: 55%; padding: 40px; display: flex; justify-content: center; align-items: center; }
-@media (max-width: 992px) { .welcome-section { display: none; } .form-section { width: 100%; } }
+.form-section { 
+    width: 55%; 
+    padding: 40px; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+}
+@media (max-width: 992px) { 
+    .welcome-section { display: none; } 
+    .form-section { width: 100%; } 
+}
 .form-box .form-title {
     font-size: 1.8rem;
     font-weight: 600;
@@ -186,10 +383,29 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     padding-bottom: 10px;
     text-align: center;
 }
+.form-link {
+    color: var(--secondary-color);
+    text-decoration: none;
+}
+.form-link:hover {
+    text-decoration: underline;
+}
 
-/* --- Cards de Tarefa e Ações Laterais --- */
-.card { border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06); transition: all 0.3s ease; position: relative; overflow: hidden;}
-.card:hover { transform: translateY(-5px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1); }
+/* --- Cards (Neobrutalism) --- */
+.card, .stat-card, .team-card, .due-soon-panel { 
+    border: 2px solid var(--border-color); 
+    background: var(--form-bg-color);
+    box-shadow: 5px 5px 0px var(--text-color); 
+    transition: all 0.2s ease; 
+    position: relative; 
+    overflow: hidden;
+    border-radius: 12px;
+}
+.card:hover, .stat-card:hover, .team-card:hover, .due-soon-panel:hover { 
+    transform: translate(-2px, -2px); 
+    box-shadow: 7px 7px 0px var(--text-color); 
+    border-color: var(--border-color); /* Borda não muda no hover */
+}
 .task-card .card-body { padding-right: 50px; }
 .task-actions { 
     position: absolute; 
@@ -216,8 +432,8 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     font-size: 1rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    border: none;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    border: 2px solid var(--border-color);
+    box-shadow: 2px 2px 0px var(--text-color);
 }
 .task-actions button i {
     font-size: 1rem;
@@ -227,8 +443,8 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     color: var(--light-text-color);
 }
 .task-actions .btn-outline-secondary:hover {
-    background-color: var(--light-text-color);
-    color: white;
+    background-color: #f8f9fa;
+    color: var(--text-color);
     transform: scale(1.05);
 }
 .task-actions .btn-danger,
@@ -244,12 +460,12 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     transform: scale(1.05);
 }
 .task-actions .btn-success {
-    background-color: var(--success-color);
+    background-color: var(--success-color); 
     color: white;
-    border-color: var(--success-color);
+    border-color: var(--success-color); 
 }
 .task-actions .btn-success:hover {
-    background-color: #1e7e34;
+    background-color: #158f6b; 
     transform: scale(1.05);
 }
 .completed-task .card-body { background-color: #f8f9fa; opacity: 0.8; }
@@ -258,9 +474,9 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 
 /* --- DASHBOARD DE ANÁLISE --- */
 .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
-.stat-card { background-color: #fff; border-radius: 12px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); text-align: center; }
-.stat-card i { font-size: 2.5rem; margin-bottom: 10px; color: var(--primary-color); }
-.stat-card .stat-number { font-size: 2.8rem; font-weight: 700; color: #333; }
+.stat-card { text-align: center; padding: 25px; } /* Já estilizado acima */
+.stat-card i { font-size: 2.5rem; margin-bottom: 10px; color: var(--primary-color); } 
+.stat-card .stat-number { font-size: 2.8rem; font-weight: 700; color: var(--text-color); } 
 .stat-card .stat-title { font-size: 1rem; color: var(--light-text-color); }
 .stat-card.col-span-2 { grid-column: span 2; }
 @media (max-width: 600px) { .stat-card.col-span-2 { grid-column: span 1; } }
@@ -272,19 +488,16 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 1.5rem;
 }
-.team-card {
-    background-color: #fff;
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+.team-card { /* Já estilizado acima */
     display: flex;
     align-items: center;
     gap: 20px;
+    padding: 25px;
 }
 .team-card-icon {
     font-size: 2.5rem;
-    color: var(--secondary-color);
-    background-color: #f0f2f5;
+    color: var(--secondary-color); 
+    background-color: var(--background-color); 
     width: 60px;
     height: 60px;
     border-radius: 50%;
@@ -301,7 +514,7 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 }
 .team-card-info .title {
     font-weight: 500;
-    color: var(--primary-color);
+    color: var(--primary-color); 
     margin: 0;
     font-size: 0.95rem;
 }
@@ -315,7 +528,7 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 /* --- CHAT e outros --- */
 #chat-container { position: fixed; bottom: 20px; right: 20px; z-index: 1050; }
 #chat-bubble { 
-    position: relative; /* Mudado para relative */
+    position: relative;
     width: 60px; 
     height: 60px; 
     background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); 
@@ -326,15 +539,29 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     align-items: center; 
     font-size: 2rem; 
     cursor: pointer; 
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); 
-    transition: all 0.3s ease; 
+    box-shadow: 3px 3px 0px var(--text-color);
+    border: 2px solid var(--text-color);
+    transition: all 0.2s ease; 
 }
-#chat-bubble:hover { transform: scale(1.1); }
-#chat-window { display: none; position: fixed; bottom: 90px; right: 20px; width: 350px; height: 450px; background: white; border-radius: 15px; box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2); flex-direction: column; overflow: hidden; }
-.chat-header { background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; padding: 15px; font-weight: 600; text-align: center; }
+#chat-bubble:hover { transform: scale(1.05) translate(-1px, -1px); box-shadow: 4px 4px 0px var(--text-color); }
+#chat-window { 
+    display: none; 
+    position: fixed; 
+    bottom: 90px; 
+    right: 20px; 
+    width: 350px; 
+    height: 450px; 
+    background: white; 
+    border-radius: 15px; 
+    box-shadow: 5px 5px 0px var(--text-color); 
+    flex-direction: column; 
+    overflow: hidden; 
+    border: 2px solid var(--border-color);
+}
+.chat-header { background: linear-gradient(45deg, var(--primary-color), var(--secondary-color)); color: white; padding: 15px; font-weight: 600; text-align: center; border-bottom: 2px solid var(--border-color); } 
 #chat-messages { flex-grow: 1; padding: 15px; overflow-y: auto; background-color: #f4f4f4; }
-#chat-form { display: flex; padding: 10px; border-top: 1px solid #eee; }
-.comment { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+#chat-form { display: flex; padding: 10px; border-top: 2px solid var(--border-color); } 
+.comment { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); } 
 .comment:last-child { border-bottom: none; }
 
 
@@ -349,8 +576,32 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     vertical-align: middle;
 }
 .activity-log-table td:first-child {
-    color: var(--primary-color);
+    color: var(--primary-color); 
 }
+.table {
+    color: var(--text-color); 
+}
+.table-hover > tbody > tr:hover > * {
+    color: var(--text-color);
+    background-color: #f0f0f0; /* Hover cinza claro */
+}
+.table-light {
+    --bs-table-bg: #f8f9fa;
+    --bs-table-border-color: var(--border-color);
+    color: var(--text-color);
+}
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #f8f9fa;
+    color: var(--text-color);
+}
+.table > :not(caption) > * > * {
+    border-bottom-width: 2px; /* Bordas de tabela mais grossas */
+    border-color: var(--border-color);
+}
+.table > :not(:first-child) {
+    border-top: 2px solid var(--border-color);
+}
+
 
 /* --- PÁGINA SSAP (User Management) --- */
 .user-management-table {
@@ -366,9 +617,28 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     font-size: 0.8rem;
     padding: 0.3em 0.6em;
     border-radius: 5px;
+    border: 2px solid var(--border-color);
+}
+.user-management-table .bg-primary {
+    background-color: var(--secondary-color) !important;
+    color: white !important;
+}
+.user-management-table .bg-secondary {
+    background-color: #f0f0f0 !important;
+    color: var(--text-color) !important;
 }
 .user-management-table .actions-cell .btn {
     margin: 0 2px;
+    transform: none; /* Remove o translate de botões em tabelas */
+    box-shadow: 2px 2px 0px var(--text-color);
+}
+.user-management-table .actions-cell .btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0px var(--text-color);
+}
+.user-management-table .actions-cell .btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0px var(--text-color);
 }
 .user-management-table .actions-cell {
     min-width: 220px;
@@ -390,14 +660,15 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     bottom: 0;
     left: 0;
     width: 100%;
-    background-color: #1e293b;
-    color: var(--sidebar-text);
+    background-color: var(--form-bg-color); /* Fundo branco */
+    color: var(--text-color); 
     padding: 15px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     z-index: 2000;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+    box-shadow: 0 -5px 0px var(--text-color); /* Sombra nítida para cima */
+    border-top: 2px solid var(--border-color);
     transform: translateY(100%);
     transition: transform 0.5s ease-out;
 }
@@ -410,7 +681,7 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     margin-right: 15px;
 }
 .cookie-banner p a {
-    color: var(--sidebar-text-hover);
+    color: var(--primary-color);
     font-weight: 600;
     text-decoration: underline;
 }
@@ -426,22 +697,19 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 }
 
 /* --- Painel Vencendo em Breve (Dashboard) --- */
-.due-soon-panel {
-    background-color: #fff;
-    border-radius: 8px;
+.due-soon-panel { /* Já estilizado como .card */
     padding: 20px;
     margin-bottom: 1.5rem;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
 }
 .due-soon-panel h5 {
     font-weight: 600;
     color: var(--text-color);
     margin-bottom: 15px;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--border-color); 
     padding-bottom: 10px;
 }
 .due-soon-panel h5 i {
-    color: var(--warning-color); /* Amarelo */
+    color: var(--warning-color); 
     margin-right: 8px;
 }
 .due-soon-list {
@@ -456,7 +724,7 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     justify-content: space-between;
     align-items: center;
     padding: 8px 5px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-color);
 }
 .due-soon-list li:last-child {
     border-bottom: none;
@@ -467,15 +735,15 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 .due-soon-list .due-date {
     font-size: 0.9rem;
     font-weight: 500;
-    color: var(--error-color); /* Vermelho */
+    color: var(--error-color);
 }
 .due-soon-list .due-date-warning {
-    color: var(--warning-color); /* Amarelo */
+    color: var(--warning-color); 
     font-weight: 500;
     font-size: 0.9rem;
 }
 
-/* --- NOVO: Estilos do Painel "Minhas Estatísticas" --- */
+/* --- Estilos do Painel "Minhas Estatísticas" --- */
 .stat-item-wrapper {
     display: flex;
     justify-content: space-around;
@@ -487,7 +755,7 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 .stat-item-number {
     font-size: 2.2rem;
     font-weight: 600;
-    color: var(--primary-color);
+    color: var(--primary-color); 
     line-height: 1.1;
 }
 .stat-item-label {
@@ -507,51 +775,37 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
 }
 
 
-/* --- ================================== --- */
-/* --- NOVOS ESTILOS: Notificações --- */
-/* --- ================================== --- */
-
-/* Base para todos os emblemas de notificação (pontos ou números) */
+/* --- Estilos de Notificações --- */
 .notification-badge {
     position: absolute;
     background-color: var(--error-color);
     color: white;
     border-radius: 50%;
-    border: 2px solid white;
+    border: 2px solid var(--border-color);
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
-
-/* Estilo para o PONTO (ex: chat global) */
 #chat-bubble .notification-badge {
     width: 14px;
     height: 14px;
     top: 5px;
     right: 5px;
 }
-
-/* Estilo para o NÚMERO (ex: comentários da tarefa) */
 .notification-badge.count {
     min-width: 20px;
     height: 20px;
     font-size: 0.75rem;
     font-weight: 600;
-    line-height: 16px; /* Ajusta o número verticalmente */
+    line-height: 16px;
     padding: 0 3px;
     text-align: center;
     top: -5px;
     right: -5px;
 }
-
-/* Torna o botão de comentário da tarefa "relative" para ancorar o badge */
 .task-comment-btn {
     position: relative;
 }
 
-/* --- ========================================== --- */
-/* --- ATUALIZAÇÃO: Badge DPO na Sidebar (CORRIGIDO) --- */
-/* --- ========================================== --- */
-
-/* Ajusta o badge numérico para a barra lateral */
+/* Badge DPO na Sidebar */
 #dpo-notification-badge {
     font-size: 0.7rem;
     padding: 0.2em 0.5em;
@@ -559,69 +813,48 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     height: 18px;
     min-width: 18px;
     line-height: 1;
-    
-    /* --- INÍCIO DA CORREÇÃO --- */
-    /* O badge deve estar escondido por padrão */
     display: none; 
-    /* O script (script.js) irá mudar para 'flex' quando houver notificações */
-    /* --- FIM DA CORREÇÃO --- */
-    
     align-items: center;
     justify-content: center;
-    
-    /* Remove o posicionamento absoluto */
     position: relative; 
-    
-    /* Remove a borda branca para ficar mais limpo na sidebar */
     border: none;
-    
-    /* Ajusta a margem para ficar alinhado */
     margin-left: auto;
     margin-right: 5px;
+    background-color: var(--error-color); 
+    color: white; 
+    border-radius: 5px;
 }
-
-/* Esconde o badge DPO quando a sidebar está recolhida */
 body.sidebar-collapsed #dpo-notification-badge {
     display: none;
 }
 
 
-/* --- ========================================== --- */
-/* --- ATUALIZAÇÃO: Log de Atividades do Usuário  --- */
-/* --- =l======================================== --- */
-
-/* Container para o log do usuário no perfil */
+/* Log de Atividades do Usuário (Perfil) */
 #user-activity-log-container {
     max-height: 400px;
     overflow-y: auto;
-    border: 1px solid var(--border-color);
+    border: 2px solid var(--border-color); 
     border-radius: 8px;
     font-size: 0.9rem;
 }
-
 .user-activity-log-table {
-    margin-bottom: 0; /* Remove a margem padrão da tabela */
+    margin-bottom: 0; 
 }
-
 .user-activity-log-table th {
     font-weight: 600;
     background-color: #f8f9fa;
-    position: sticky; /* Cabeçalho fixo */
+    position: sticky; 
     top: 0;
+    border-bottom-width: 2px !important;
 }
-
 .user-activity-log-table td {
     vertical-align: middle;
 }
-
 .user-activity-log-table td:first-child {
-    /* Texto da ação */
-    color: #333;
+    color: var(--text-color); 
 }
-
 .user-activity-log-table td:last-child {
-    /* Data */
     color: var(--light-text-color);
     font-size: 0.85rem;
-    white-space: nowrap; /* Não quebra a data */
+    white-space: nowrap; 
 }
