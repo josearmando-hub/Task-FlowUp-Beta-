@@ -1,6 +1,6 @@
 # Task FlowUp
 
-![Logo do Task FlowUp](imagen-2.0.png)
+![Logo do Task FlowUp](image-2.0.png)
 
 O **Task FlowUp** é uma aplicação full-stack completa para gerenciamento de tarefas, projetada como uma plataforma interna (SaaS) para equipes. Ele fornece ferramentas robustas para gerenciamento de projetos, comunicação de equipe e monitoramento de produtividade, com um forte foco em segurança (2FA, Hashing PBKDF2) e conformidade com a LGPD.
 
