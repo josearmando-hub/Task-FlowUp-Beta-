@@ -18,91 +18,67 @@
             <h5 class="modal-title" id="termsModalLabel">Termos de Serviço e Política de Privacidade</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
           </div>
+          
           <div class="modal-body">
-            <p><strong>Última atualização:</strong> 30 de Outubro de 2025</p>
-            <p>Bem-vindo ao Task FlowUp. Ao se registrar e usar nossa plataforma, você concorda com estes Termos de Serviço e nossa Política de Privacidade.</p>
+            <p><strong>Última atualização:</strong> 16 de novembro de 2025</p>
+            <p>Bem-vindo ao Task FlowUp. Ao criar <strong>uma</strong> conta ou usar nossos serviços, você concorda com estes Termos de Serviço e com nossa Política de Privacidade.</p>
             
-            <p class="text-danger small"><strong>NOTA IMPORTANTE:</strong> O texto a seguir é um modelo gerado com base nas funcionalidades do sistema e na LGPD. Ele NÃO substitui a consultoria jurídica. Recomenda-se que um profissional revise este documento.</p>
-
             <hr>
-            
+
             <h5>1. Aceitação dos Termos</h5>
-            <p>Ao marcar a caixa "Eu li e concordo..." e clicar em "Registrar", você celebra um acordo legalmente vinculativo conosco e concorda em cumprir estes Termos.</p>
-
-            <h5>2. Descrição dos Serviços</h5>
-            <p>O Task FlowUp é uma plataforma de gerenciamento de tarefas que permite aos usuários:</p>
-            <ul>
-                <li>Criar, editar, excluir e atribuir tarefas.</li>
-                <li>Comentar em tarefas específicas.</li>
-                <li>Comunicar-se através de um chat de equipe.</li>
-                <li>Visualizar o painel de análise de produtividade.</li>
-            </ul>
-
+            <p>Ao marcar a caixa "Eu li e aceito os Termos de Serviço" durante o registro, você celebra um acordo legalmente vinculativo com a entidade que fornece o Task FlowUp (o "Controlador" de dados) e concorda em cumprir estes termos.</p>
+            
+            <h5>2. O Serviço</h5>
+            <p>O Task FlowUp ("Serviço") é uma plataforma de software como serviço (SaaS) projetada para o gerenciamento de tarefas, comunicação interna e monitoramento de produtividade de equipes.</p>
+            
             <h5>3. Contas de Usuário</h5>
             <ul>
-                <li><strong>Cadastro:</strong> Você concorda em fornecer informações verdadeiras e completas durante o registro (Nome de Usuário, E-mail, Senha, Cargo).</li>
-                <li><strong>Segurança:</strong> Você é responsável por manter a confidencialidade de sua senha.</li>
-                <li><strong>Tipos de Conta:</strong> O sistema possui dois níveis de acesso: "Funcionário" e "Administrador".</li>
+                <li><strong>3.1. Elegibilidade:</strong> Você deve ter autorização da sua organização para criar uma conta.</li>
+                <li><strong>3.2. Funções (Roles):</strong> As contas podem ser de dois tipos: "Administrador" ou "Funcionário", cada uma com diferentes níveis de acesso. O registro como "Administrador" requer uma chave de registro específica (<code>adminKey</code>) fornecida pelo Controlador.</li>
+                <li><strong>3.3. Segurança da Conta:</strong> Você é responsável por manter a confidencialidade de sua senha. Nosso sistema <strong>armazena</strong> sua senha usando hashing PBKDF2-HMAC-SHA256 com 250.000 iterações e um salt criptográfico exclusivo, tornando-a ilegível para nós.</li>
             </ul>
-
-            <h5>4. Responsabilidades do Administrador</h5>
-            <p>Se você possui uma conta de "Administrador", você reconhece que tem acesso a funcionalidades avançadas que afetam outros usuários, incluindo:</p>
-            <ul>
-                <li>Acesso ao Log de Atividades de todo o sistema.</li>
-                <li>Capacidade de editar, excluir e forçar a redefinição de senha de outros usuários.</li>
-                <li>Capacidade de "Impersonar" (assumir a sessão) de outros usuários para fins de suporte ou auditoria. Você concorda em usar esse poder de forma ética e apenas quando necessário.</li>
-            </ul>
-
-            <h5>5. Conteúdo do Usuário</h5>
-            <p>Você é o único responsável pelo conteúdo que publica nos comentários das tarefas e no chat da equipe. Você concorda em não publicar conteúdo ilegal, difamatório, odioso ou que infrinja os direitos de terceiros.</p>
 
             <hr>
 
-            <h4 class="mt-4">Política de Privacidade (LGPD)</h4>
+            <h4 class="mt-4">Política de Privacidade (Conformidade com a LGPD)</h4>
+            <p>Esta seção descreve como tratamos seus dados pessoais em conformidade com a Lei Geral de Proteção de Dados (Lei Nº 13.709/2018).</p>
 
-            <h5>6. Coleta de Dados (O que coletamos)</h5>
-            <p>Para operar a plataforma, coletamos os seguintes dados pessoais:</p>
+            <h5>4. Dados Coletados</h5>
+            <p>Nós atuamos como "Operador" dos dados em nome da sua organização (o "Controlador"). Coletamos os seguintes dados:</p>
             <ul>
-                <li><strong>Dados de Identificação:</strong> Nome de usuário, e-mail, cargo (opcional).</li>
-                <li><strong>Dados de Autenticação:</strong> Hash de senha e salt criptográfico (nunca armazenamos sua senha em texto plano).</li>
-                <li><strong>Dados Gerados pelo Uso:</strong>
-                    <ul>
-                        <li>Tarefas, comentários e mensagens de chat que você cria.</li>
-                        <li>Logs de atividade (ex: "Usuário X fez login às 10:00").</li>
-                    </ul>
-                </li>
+                <li><strong>Dados Fornecidos por Você:</strong> Nome de usuário, e-mail, cargo e sua senha (armazenada em formato hash seguro).</li>
+                <li><strong>Dados Gerados pelo Uso:</strong> Tarefas que você cria ou lhe são atribuídas, comentários em tarefas, mensagens no chat global e logs de atividade (ex: hora do login, criação de tarefa).</li>
             </ul>
 
-            <h5>7. Finalidade do Tratamento (Por que coletamos)</h5>
-            <p>Usamos seus dados exclusivamente para:</p>
+            <h5>5. Finalidade e Base Legal para o Tratamento</h5>
+            <p>Utilizamos seus dados estritamente para os seguintes fins (Princípio da Finalidade e Minimização):</p>
             <ul>
-                <li>Fornecer, operar e manter o serviço Task FlowUp.</li>
-                <li>Autenticar seu acesso à plataforma.</li>
-                <li>Atribuir tarefas e identificar quem criou qual conteúdo (tarefas, comentários).</li>
-                <li>Garantir a segurança e auditoria do sistema através de logs (Função de Admin).</li>
-                <li>Permitir a recuperação de senha.</li>
+                <li><strong>Para Operar o Serviço:</strong> Autenticar seu login, atribuir tarefas e permitir a comunicação. (Base Legal: Execução de Contrato).</li>
+                <li><strong>Para Segurança e Auditoria:</strong> Manter um log de atividades (<code>activity_log</code>) para fins de auditoria interna, segurança e prestação de contas (Accountability). (Base Legal: Interesse Legítimo do Controlador).</li>
+                <li><strong>Para Cumprir Obrigações Legais:</strong> Atender às suas solicitações como titular dos dados (ex: acesso ou exclusão) conforme exigido pela LGPD.</li>
             </ul>
 
-            <h5>8. Seus Direitos como Titular (LGPD)</h5>
-            <p>Você tem controle sobre seus dados pessoais:</p>
+            <h5>6. Seus Direitos como Titular dos Dados (Art. 18, LGPD)</h5>
+            <p>Você, como "Titular" dos dados, possui direitos sobre suas informações pessoais:</p>
             <ul>
-                <li><strong>Direito de Acesso e Correção:</strong> Você pode acessar e atualizar seus dados de perfil (nome de usuário, e-mail, cargo) a qualquer momento através da página "Meu Perfil".</li>
-                <li><strong>Direito de Exclusão (Anonimização):</strong> Você pode solicitar a exclusão da sua conta através da "Zona de Perigo" na sua página de perfil. Conforme implementado em nosso sistema:
-                    <ul>
-                        <li>Esta ação é <strong>permanente</strong>.</li>
-                        <li>Seus dados pessoais (nome de usuário, e-mail) serão permanentemente alterados para um valor anônimo (ex: "usuario_anonimizado_123").</li>
-                        <li>Suas mensagens de chat e comentários de tarefas serão apagados ou substituídos por "[removido pelo usuário]".</li>
-                        <li>Isso é feito para manter a integridade dos projetos (as tarefas criadas por você permanecerão, mas atribuídas ao usuário anônimo).</li>
-                    </ul>
-                </li>
-                <li><strong>Direito de Petição (Fale com o DPO):</strong> Você pode enviar solicitações formais, perguntas ou reclamações sobre o uso dos seus dados pessoais diretamente ao nosso Encarregado de Proteção de Dados (DPO) através da "Central de Privacidade" em seu perfil.</li>
+                <li><strong>Direito de Acesso e Correção:</strong> Você pode acessar e corrigir a maioria dos seus dados (como e-mail e cargo) diretamente na seção "Meu Perfil" da aplicação.</li>
+                <li><strong>Direito de Exclusão (Eliminação):</strong> Você pode solicitar a exclusão da sua conta. Conforme nosso fluxo de conformidade, esta solicitação é enviada ao Administrador (DPO) e agendada para execução.</li>
+                <li><strong>Processo de Exclusão:</strong> Ao confirmar a exclusão, seus dados pessoais identificáveis (username, email) serão permanentemente <strong>excluidos</strong> (ex: "usuario_excluido") em nosso banco de dados. Registros não pessoais (como o conteúdo de tarefas ou comentários, agora excluidos) podem ser mantidos para garantir a integridade do histórico da empresa, sem que possam ser rastreados de volta a você.</li>
+            </ul>
+
+            <h5>7. Canal de Atendimento (DPO)</h5>
+            <p>Para exercer seus direitos (como solicitar a exclusão) ou para tirar dúvidas sobre seus dados, utilize a "Central de Privacidade" disponível no seu Perfil. O Administrador do sistema em sua organização foi designado como o Encarregado (DPO) e receberá sua solicitação.</p>
+
+            <h5>8. Compartilhamento e Segurança de Dados</h5>
+            <p>Nós não vendemos ou alugamos seus dados pessoais. O acesso aos seus dados é restrito:</p>
+            <ul>
+                <li>Internamente, a outros usuários da sua equipe (ex: seu administrador ou colegas de equipe em uma tarefa).</li>
+                <li>O acesso de "Funcionários" a tarefas é limitado por um sistema de Categorias (Controle de Acesso Baseado em Funções - RBAC), garantindo que você veja apenas dados pertinentes à sua função.</li>
+                <li>Externamente, apenas com nossos operadores de infraestrutura (servidores de hospedagem na Render e banco de dados PostgreSQL) necessários para operar o serviço.</li>
             </ul>
             
-            <h5>9. Compartilhamento e Segurança</h5>
-            <p>Não compartilhamos seus dados pessoais com terceiros. Empregamos medidas de segurança, como hashing de senhas com salt, para proteger suas informações.</p>
-
-            <h5>10. Encerramento da Conta</h5>
-            <p>Sua conta pode ser encerrada (excluída) por um Administrador ou por você mesmo através do processo de anonimização.</p>
+            <h5>9. Alterações nos Termos</h5>
+            <p>Podemos atualizar estes Termos periodicamente. Se uma alteração for material, notificaremos você através da plataforma ou por e-mail.</p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
@@ -110,6 +86,7 @@
         </div>
       </div>
     </div>
+    
     <div class="auth-container">
         <div class="auth-wrapper">
             <div class="welcome-section">
@@ -119,6 +96,7 @@
                 </div>
             </div>
             <div class="form-section">
+                
                 <div id="login-section">
                     <div class="form-box">
                         <h2 class="form-title">Bem-vindo de volta!</h2>
@@ -227,6 +205,7 @@
     </div>
 
     <div class="app-container" style="display: none;">
+        
         <nav id="sidebar">
             <div class="sidebar-header">
                 <img src="image.png" alt="Logo" class="sidebar-logo">
@@ -251,6 +230,7 @@
         </nav>
 
         <div id="content-wrapper">
+            
             <div id="impersonation-banner" style="display: none;">
                 <i class="bi bi-exclamation-triangle-fill"></i>
                 Você está atualmente logado como <strong id="impersonation-username"></strong>.
@@ -271,6 +251,7 @@
                     </div>
                 </div>
             </header>
+            
             <main id="main-content" class="container-fluid"></main>
         </div>
     </div>
@@ -535,9 +516,7 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-
     <script src="script.js"></script>
 
     <div id="cookie-consent-banner" class="cookie-banner">
