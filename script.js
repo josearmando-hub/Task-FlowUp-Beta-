@@ -339,8 +339,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('chat-container').style.display = 'block';
         document.getElementById('header-username').textContent = currentUser.username;
         
-        const isAdmin = currentUser.role === 'admin';
-        document.getElementById('quick-add-task-btn').style.display = (currentUser) ? 'flex' : 'none';
+        // --- ATUALIZAÇÃO: Botão de adicionar tarefa visível apenas para admin ---
+        const isAdminView = (currentUser.role === 'admin' && !currentUser.impersonating);
+        document.getElementById('quick-add-task-btn').style.display = (isAdminView) ? 'flex' : 'none';
         
         const navLogout = document.getElementById('nav-logout');
         
@@ -357,11 +358,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             impersonationBanner.style.display = 'none';
             navLogout.innerHTML = `<a href="#"><i class="bi bi-box-arrow-left"></i><span>Sair</span></a>`;
-            document.getElementById('nav-activity-log').style.display = isAdmin ? 'list-item' : 'none';
-            document.getElementById('nav-ssap').style.display = isAdmin ? 'list-item' : 'none';
-            document.getElementById('nav-dpo').style.display = isAdmin ? 'list-item' : 'none';
+            document.getElementById('nav-activity-log').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
+            document.getElementById('nav-ssap').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
+            document.getElementById('nav-dpo').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
             if (document.getElementById('nav-categories')) { 
-                document.getElementById('nav-categories').style.display = isAdmin ? 'list-item' : 'none'; 
+                document.getElementById('nav-categories').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
             } 
         }
         
