@@ -5,18 +5,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let allTasks = []; 
     let currentFilter = 'all';
     let currentCategoryFilter = 'all';
+    
+    // Modais
     let editTaskModal, commentsModal, confirmationModal, forceResetModal, adminUserEditModal;
     let quickAddTaskModal; 
     let assignCategoriesModal;
     let manageCategoryUsersModal;
     
-    // --- ATUALIZAÇÃO DE SEGURANÇA: Novos Modais ---
-    let login2faModal; // Modal para pedir o código 2FA
-    let setup2faModal; // Modal para mostrar o QR Code de configuração
-    let disable2faModal; // Modal para confirmar a desativação do 2FA
+    // Modais de Segurança
+    let login2faModal; 
+    let setup2faModal; 
+    let disable2faModal; 
     
-    // --- ATUALIZAÇÃO DE SEGURANÇA: Variável para o fluxo de login ---
-    let loginUsernameCache = ''; // Armazena o username durante o pedido 2FA
+    // Variável para o fluxo de login
+    let loginUsernameCache = ''; 
 
     // --- SELETORES DO DOM ---
     const authContainer = document.querySelector('.auth-container');
@@ -28,14 +30,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- ================================== ---
-    // --- ATUALIZAÇÃO: Helpers de Segurança (Frontend)
+    // --- Helpers de Autenticação JWT        ---
+    // --- ================================== ---
+
+    /**
+     * Retorna os headers. 
+     * CORREÇÃO: Lê do localStorage a cada chamada para garantir que alterações manuais sejam detectadas.
+     */
+    function getAuthHeaders() {
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        const token = localStorage.getItem('authToken'); // Lê direto do disco
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+    }
+
+    /**
+     * Substitui o fetch padrão para rotas protegidas.
+     * Adiciona o token automaticamente e lida com expiração (401).
+     */
+    async function authorizedFetch(url, options = {}) {
+        const headers = { ...getAuthHeaders(), ...(options.headers || {}) };
+        const finalOptions = { ...options, headers };
+
+        const response = await fetch(url, finalOptions);
+
+        if (response.status === 401) {
+            // Se o token expirou ou é inválido, desloga o usuário
+            console.warn("Sessão expirada ou token inválido. Realizando logout.");
+            performFullLogout();
+            throw new Error("Sessão expirada. Por favor, faça login novamente.");
+        }
+
+        return response;
+    }
+
+    // --- ================================== ---
+    // --- Helpers de Segurança (Frontend)    ---
     // --- ================================== ---
     
-    /**
-     * Valida a força da senha no frontend para feedback imediato.
-     * @param {string} password - A senha a ser verificada.
-     * @returns {object} - { strong: boolean, message: string }
-     */
     function validatePasswordStrength(password) {
         if (password.length < 8) {
             return { strong: false, message: "A senha deve ter pelo menos 8 caracteres." };
@@ -49,27 +85,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!/[0-9]/.test(password)) {
             return { strong: false, message: "Deve conter pelo menos um número." };
         }
-        if (!/[\W_]/.test(password)) { // \W é qualquer não-palavra (símbolo)
+        if (!/[\W_]/.test(password)) { 
             return { strong: false, message: "Deve conter pelo menos um caractere especial." };
         }
         return { strong: true, message: "Senha forte." };
     }
     
-    /**
-     * Valida o formato do e-mail no frontend.
-     * @param {string} email - O e-mail a ser verificado.
-     * @returns {boolean}
-     */
     function validateEmailFormat(email) {
         const pattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         return pattern.test(email);
     }
     
-    /**
-     * Mostra os requisitos de senha no formulário de registro.
-     * @param {HTMLElement} errorElement - O elemento <div> para exibir os erros.
-     * @param {string} password - A senha atual.
-     */
     function showPasswordRequirements(errorElement, password) {
         let messages = [];
         if (password.length < 8) messages.push("Pelo menos 8 caracteres.");
@@ -86,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
             errorElement.style.color = 'var(--success-color)';
         }
     }
-    // --- Fim dos Helpers de Segurança ---
 
 
     // --- AUTENTICAÇÃO / FORM SWITCH ---
@@ -94,14 +119,26 @@ document.addEventListener('DOMContentLoaded', () => {
         [document.getElementById('login-section'), document.getElementById('registration-section'), document.getElementById('forgot-password-section')].forEach(s => s.style.display = 'none');
         sectionToShow.style.display = 'block';
     };
+
+    // Verifica sessão ao carregar a página (Persistência)
+    (function checkSession() {
+        const storedUser = localStorage.getItem('currentUser');
+        const storedToken = localStorage.getItem('authToken');
+        
+        if (storedUser && storedToken) {
+            currentUser = JSON.parse(storedUser);
+            // Inicia sessão sem salvar de novo (já está salvo)
+            startSession(currentUser, false);
+        }
+    })();
+
     document.getElementById('show-register').addEventListener('click', (e) => { e.preventDefault(); showSection(document.getElementById('registration-section')); });
     document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); showSection(document.getElementById('login-section')); });
     document.getElementById('show-forgot-password').addEventListener('click', (e) => { e.preventDefault(); showSection(document.getElementById('forgot-password-section')); });
     document.getElementById('show-login-from-forgot').addEventListener('click', (e) => { e.preventDefault(); showSection(document.getElementById('login-section')); });
 
-    // Registro (ATUALIZADO COM VALIDAÇÃO)
+    // Registro
     try {
-        // Feedback de senha em tempo real
         const regPassInput = document.getElementById('register-password');
         const regErrEl = document.getElementById('register-error');
         if (regPassInput) {
@@ -115,13 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isAdmin = e.target.value === 'admin';
                 document.getElementById('admin-fields').style.display = isAdmin ? 'block' : 'none';
                 document.getElementById('employee-fields').style.display = isAdmin ? 'none' : 'block';
-                // --- ATUALIZAÇÃO: Admin também precisa de e-mail ---
                 document.getElementById('admin-key').required = isAdmin;
                 document.getElementById('register-email').required = !isAdmin;
                 document.getElementById('admin-email').required = isAdmin;
             });
         });
-    } catch(e) { /* form might differ per deployment; ignore safely */ }
+    } catch(e) { }
 
     document.getElementById('register-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -129,14 +165,12 @@ document.addEventListener('DOMContentLoaded', () => {
         err.textContent = '';
         
         const role = e.target.elements.role.value;
-        // --- ATUALIZAÇÃO: Pega o e-mail do campo correto ---
         const email = (role === 'admin') 
             ? document.getElementById('admin-email').value.trim()
             : document.getElementById('register-email').value.trim();
             
         const password = e.target.elements['register-password'].value;
         
-        // --- ATUALIZAÇÃO: Validação de Frontend ---
         if (!validateEmailFormat(email)) {
             err.textContent = 'O formato do e-mail é inválido.';
             return;
@@ -146,7 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
             err.textContent = `Senha fraca: ${passCheck.message}`;
             return;
         }
-        // --- Fim da Validação ---
         
         const fd = {
             username: e.target.elements['register-username'].value.trim(),
@@ -158,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             consent: e.target.elements['register-consent'].checked
         };
         try {
+            // Registro é público, usa fetch normal
             const res = await fetch(`${API_URL}/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -166,9 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro ao registrar');
             
-            // --- ATUALIZAÇÃO: Mensagem de Verificação de E-mail ---
             alert('Usuário registrado com sucesso! Se o sistema estiver em modo de produção, um e-mail de verificação será enviado.');
-            // --- Fim da Atualização ---
             
             showSection(document.getElementById('login-section'));
             e.target.reset();
@@ -177,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Login (ATUALIZADO COM FLUXO 2FA)
+    // Login (ATUALIZADO PARA JWT)
     document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const err = document.getElementById('login-error');
@@ -186,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         err.textContent = '';
         
         try {
+            // Login é público, usa fetch normal
             const res = await fetch(`${API_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -194,37 +227,37 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             
             if (!res.ok) {
-                 // Erros 4xx (senha errada, usuário não encontrado, e-mail não verificado)
                 throw new Error(data.error || 'Erro ao logar');
             }
 
-            // --- ATUALIZAÇÃO: Fluxo 2FA ---
             if (data.user && data.user.needsPasswordReset) {
-                // 1. Caso: Reset de Senha Forçado
+                // Caso: Reset Forçado
                 currentUser = data.user;
-                initializeModalsAndChat(); // Garante que o modal está pronto
+                // Salva token temporário no storage para o reset funcionar
+                localStorage.setItem('authToken', data.token); 
+                initializeModalsAndChat(); 
                 forceResetModal.show();
             
             } else if (data['2fa_required']) {
-                // 2. Caso: 2FA é necessário
-                loginUsernameCache = username; // Salva o username
-                initializeModalsAndChat(); // Garante que o modal 2FA está pronto
+                // Caso: 2FA
+                loginUsernameCache = username; 
+                initializeModalsAndChat(); 
                 document.getElementById('login-2fa-error').textContent = '';
                 document.getElementById('login-2fa-form').reset();
-                login2faModal.show(); // Mostra o modal pedindo o código
+                login2faModal.show(); 
             
             } else {
-                // 3. Caso: Login direto (bem-sucedido)
+                // Caso: Sucesso (Recebe Token e User)
+                localStorage.setItem('authToken', data.token); // Salva token
                 startSession(data.user);
             }
-            // --- Fim da Atualização ---
             
         } catch (error) {
             err.textContent = error.message;
         }
     });
     
-    // --- ATUALIZAÇÃO: Novo Handler para o Modal 2FA ---
+    // Handler para o Modal 2FA (ATUALIZADO PARA JWT)
     try {
         document.getElementById('login-2fa-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -238,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             try {
+                // 2FA Login é público
                 const res = await fetch(`${API_URL}/login/2fa`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -250,9 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // Sucesso!
+                localStorage.setItem('authToken', data.token); // Captura o JWT e salva
                 login2faModal.hide();
-                loginUsernameCache = ''; // Limpa o cache
-                startSession(data.user); // Inicia a sessão
+                loginUsernameCache = ''; 
+                startSession(data.user); 
                 
             } catch (error) {
                 err.textContent = error.message;
@@ -260,13 +295,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     } catch(e) { /* ok */ }
 
-    // Forgot password (sem alterações)
+    // Forgot password
     document.getElementById('forgot-password-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fb = document.getElementById('forgot-feedback');
         fb.textContent = '';
         fb.classList.remove('text-success');
         try {
+            // Público
             const res = await fetch(`${API_URL}/forgot-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -282,12 +318,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Force reset form (ATUALIZADO COM VALIDAÇÃO)
+    // Force reset form (PROTEGIDO)
     try {
         const resetPassInput = document.getElementById('reset-new-password');
         const resetErrEl = document.getElementById('force-reset-error');
         if(resetPassInput) {
-            // Mostra requisitos em tempo real
             resetPassInput.addEventListener('input', (e) => {
                 showPasswordRequirements(resetErrEl, e.target.value);
             });
@@ -300,46 +335,53 @@ document.addEventListener('DOMContentLoaded', () => {
             const confPass = document.getElementById('reset-confirm-password').value;
             err.textContent = '';
             
-            // --- ATUALIZAÇÃO: Validação de Frontend ---
             const passCheck = validatePasswordStrength(newPass);
             if (!passCheck.strong) {
                 err.textContent = `Senha fraca: ${passCheck.message}`;
                 return;
             }
-            // --- Fim da Validação ---
             
             if (newPass !== confPass) { err.textContent = 'As senhas não coincidem.'; return; }
             
             try {
-                const res = await fetch(`${API_URL}/user/reset-password`, {
+                // Protegido (usa authorizedFetch)
+                const res = await authorizedFetch(`${API_URL}/user/reset-password`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: currentUser.id, newPassword: newPass })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Erro ao resetar senha');
                 alert('Senha atualizada com sucesso!');
                 forceResetModal.hide();
+                
+                // Lógica de restauração se estiver impersonando (raro aqui, mas possível)
                 if (currentUser.impersonating) {
-                    localStorage.removeItem('originalAdminSession');
+                    restoreAdminSession();
+                } else {
+                    currentUser.needsPasswordReset = false;
+                    startSession(currentUser);
                 }
-                currentUser.needsPasswordReset = false;
-                startSession(currentUser);
             } catch (error) {
                 err.textContent = error.message;
             }
         });
     } catch(e) { /* ok if modal not present */ }
 
-    // --- SESSÃO (sem alterações) ---
-    function startSession(user) {
+    // --- SESSÃO ---
+    function startSession(user, saveToStorage = true) {
         currentUser = user;
+        
+        // Salva sessão localmente para persistência
+        if (saveToStorage) {
+            // Nota: authToken já deve ter sido salvo no login/2fa
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        }
+
         authContainer.style.display = 'none';
         appContainer.style.display = 'flex';
         document.getElementById('chat-container').style.display = 'block';
         document.getElementById('header-username').textContent = currentUser.username;
         
-        // --- ATUALIZAÇÃO: Botão de adicionar tarefa visível apenas para admin ---
         const isAdminView = (currentUser.role === 'admin' && !currentUser.impersonating);
         document.getElementById('quick-add-task-btn').style.display = (isAdminView) ? 'flex' : 'none';
         
@@ -358,11 +400,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             impersonationBanner.style.display = 'none';
             navLogout.innerHTML = `<a href="#"><i class="bi bi-box-arrow-left"></i><span>Sair</span></a>`;
-            document.getElementById('nav-activity-log').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
-            document.getElementById('nav-ssap').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
-            document.getElementById('nav-dpo').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
+            document.getElementById('nav-activity-log').style.display = isAdminView ? 'list-item' : 'none'; 
+            document.getElementById('nav-ssap').style.display = isAdminView ? 'list-item' : 'none'; 
+            document.getElementById('nav-dpo').style.display = isAdminView ? 'list-item' : 'none'; 
             if (document.getElementById('nav-categories')) { 
-                document.getElementById('nav-categories').style.display = isAdminView ? 'list-item' : 'none'; // Usando isAdminView
+                document.getElementById('nav-categories').style.display = isAdminView ? 'list-item' : 'none'; 
             } 
         }
         
@@ -374,14 +416,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function logout() {
         if (currentUser && currentUser.impersonating) {
-            const adminSessionStr = localStorage.getItem('originalAdminSession');
-            localStorage.removeItem('originalAdminSession');
-            if (adminSessionStr) {
-                const adminSession = JSON.parse(adminSessionStr);
-                startSession(adminSession);
-            } else {
-                performFullLogout();
-            }
+            restoreAdminSession();
+        } else {
+            performFullLogout();
+        }
+    }
+    
+    function restoreAdminSession() {
+        // Recupera dados do admin original
+        const adminToken = localStorage.getItem('originalAdminToken');
+        const adminUserStr = localStorage.getItem('originalAdminUser');
+        
+        if (adminToken && adminUserStr) {
+            // Restaura
+            const adminUser = JSON.parse(adminUserStr);
+            
+            // Limpa dados temporários
+            localStorage.removeItem('originalAdminToken');
+            localStorage.removeItem('originalAdminUser');
+            
+            // Atualiza storage principal
+            localStorage.setItem('authToken', adminToken);
+            localStorage.setItem('currentUser', adminUserStr);
+            
+            startSession(adminUser, false);
         } else {
             performFullLogout();
         }
@@ -390,7 +448,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function performFullLogout() {
         currentUser = null; 
         allTasks = [];
-        localStorage.removeItem('originalAdminSession'); 
+        
+        // Limpa tudo
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('originalAdminToken');
+        localStorage.removeItem('originalAdminUser');
+
         appContainer.style.display = 'none';
         mainContent.innerHTML = '';
         document.getElementById('chat-container').style.display = 'none';
@@ -399,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-form').reset();
     }
 
-    // --- EVENT LISTENERS GERAIS (sem alterações) ---
+    // --- EVENT LISTENERS GERAIS ---
     function setupEventListeners() {
         const oldToggle = document.getElementById('sidebar-toggle');
         if (oldToggle && oldToggle.parentNode) {
@@ -453,7 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- RENDERIZAÇÃO DE VIEWS (sem alterações) ---
+    // --- RENDERIZAÇÃO DE VIEWS ---
     function renderView(viewName) {
         document.querySelector('#sidebar .components li.active')?.classList.remove('active');
         document.querySelector(`#sidebar .components li[data-view="${viewName}"]`)?.classList.add('active');
@@ -478,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (viewName === 'dpo') renderDpoView();
     }
 
-    // --- PROFILE VIEW (ATUALIZADO COM SEÇÃO 2FA) ---
+    // --- PROFILE VIEW (PROTEGIDO) ---
     async function renderProfileView() {
         mainContent.innerHTML = `
             <div class="content-header"><h2>Meu Perfil</h2></div>
@@ -579,8 +643,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>`;
             
-        // --- Lógica das Novas Features ---
-        // 1. Calcular Minhas Estatísticas
         if (allTasks.length > 0) {
             const myTasks = allTasks.filter(t => t.assigned_to_id === currentUser.id);
             const completed = myTasks.filter(t => t.completed).length;
@@ -594,16 +656,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-my-overdue').textContent = overdue;
         }
         
-        // 2. Adicionar Listener do Formulário DPO
         document.getElementById('dpo-request-form').addEventListener('submit', handleDpoRequest);
         
-        // 3. Carregar dados do perfil (agora inclui 2FA)
         loadProfileData();
 
-        // Listeners dos formulários (lógica original)
         document.getElementById('profile-form').addEventListener('submit', handleProfileUpdate);
         
-        // ATUALIZAÇÃO: Adiciona feedback de senha em tempo real
         const newPassInput = document.getElementById('new-password');
         const passErrEl = document.getElementById('password-error');
         if (newPassInput) {
@@ -613,7 +671,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         document.getElementById('change-password-form').addEventListener('submit', handleChangePassword);
         
-        // Listener do botão de exclusão (agora solicitação)
         document.getElementById('delete-account-btn').addEventListener('click', handleDeleteSelfAccount);
 
         loadMyDpoRequests();
@@ -623,19 +680,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- ATUALIZAÇÃO: Nova Função para Carregar Dados do Perfil (inclui 2FA) ---
     async function loadProfileData() {
         try {
-            const response = await fetch(`${API_URL}/user/${currentUser.id}`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/user/${currentUser.id}`);
             if (!response.ok) throw new Error('Não foi possível carregar os dados do perfil.');
             const userData = await response.json();
             
-            // 1. Preenche o formulário de perfil
             document.getElementById('profile-username').value = userData.username;
             document.getElementById('profile-email').value = userData.email;
             document.getElementById('profile-job-title').value = userData.job_title || '';
             
-            // 2. Atualiza o card de segurança 2FA
             render2faCard(userData.is_totp_enabled);
             
         } catch(error) {
@@ -643,7 +698,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ATUALIZAÇÃO: Nova Função para Renderizar o Card 2FA ---
     function render2faCard(is2faEnabled) {
         const container = document.getElementById('security-2fa-card-body');
         if (currentUser.impersonating) {
@@ -652,7 +706,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (is2faEnabled) {
-            // 2FA Está ATIVADO
             container.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-shield-check text-success" style="font-size: 2rem; margin-right: 15px;"></i>
@@ -664,14 +717,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button id="disable-2fa-btn" class="btn btn-outline-danger w-100 mt-3">Desativar 2FA</button>
             `;
             container.querySelector('#disable-2fa-btn').addEventListener('click', () => {
-                 initializeModalsAndChat(); // Garante que o modal está pronto
+                 initializeModalsAndChat();
                  document.getElementById('disable-2fa-form').reset();
                  document.getElementById('disable-2fa-error').textContent = '';
                  disable2faModal.show();
             });
             
         } else {
-            // 2FA Está DESATIVADO
             container.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-shield-exclamation text-warning" style="font-size: 2rem; margin-right: 15px;"></i>
@@ -686,7 +738,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ATUALIZAÇÃO: Handler de Update de Perfil (com validação) ---
     async function handleProfileUpdate(e) {
         e.preventDefault();
         if (currentUser.impersonating) return;
@@ -697,7 +748,6 @@ document.addEventListener('DOMContentLoaded', () => {
         successEl.textContent = '';
         
         const email = document.getElementById('profile-email').value.trim();
-        // Validação
         if (!validateEmailFormat(email)) {
             errorEl.textContent = 'O formato do e-mail é inválido.';
             return;
@@ -706,22 +756,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const updatedData = {
             username: document.getElementById('profile-username').value.trim(),
             email: email,
-            job_title: document.getElementById('profile-job-title').value.trim(),
-            acting_user_id: currentUser.id 
+            job_title: document.getElementById('profile-job-title').value.trim()
         };
         try {
-            const response = await fetch(`${API_URL}/user/${currentUser.id}`, {
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/user/${currentUser.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updatedData)
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Erro ao atualizar perfil');
             
-            // Atualiza o currentUser local com os novos dados
             currentUser.username = data.user.username;
             currentUser.email = data.user.email;
             currentUser.jobTitle = data.user.job_title;
+            // Atualiza storage
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
             
             document.getElementById('header-username').textContent = currentUser.username;
             successEl.textContent = 'Perfil atualizado com sucesso!';
@@ -730,7 +780,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- ATUALIZAÇÃO: Handler de Mudar Senha (com validação) ---
     async function handleChangePassword(e) {
         e.preventDefault();
         if (currentUser.impersonating) return;
@@ -743,7 +792,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const newPassword = document.getElementById('new-password').value;
         const confirmPassword = document.getElementById('confirm-password').value;
         
-        // Validação
         const passCheck = validatePasswordStrength(newPassword);
         if (!passCheck.strong) {
             errorEl.innerHTML = `Senha fraca:<br>${passCheck.message.replace(/\./g, '.<br>')}`;
@@ -755,10 +803,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            const response = await fetch(`${API_URL}/user/change-password`, {
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/user/change-password`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: currentUser.id, oldPassword, newPassword })
+                body: JSON.stringify({ oldPassword, newPassword })
             });
             const data = await response.json(); 
             if (!response.ok) throw new Error(data.error || 'Erro ao alterar senha');
@@ -770,17 +818,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     
-    // --- (Funções DPO, Exclusão, Dashboard, etc. permanecem aqui, sem alterações) ---
+    // --- FUNÇÕES DEPO / DELETE ---
     async function handleDpoRequest(e) {
         e.preventDefault();
         const requestType = document.getElementById('dpo-request-type').value;
         const message = document.getElementById('dpo-request-message').value;
         try {
-            const response = await fetch(`${API_URL}/dpo-request`, {
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/dpo-request`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    acting_user_id: currentUser.id,
                     request_type: requestType,
                     message_text: message
                 })
@@ -805,10 +852,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/user/delete-self`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/user/delete-self`, { 
                     method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: currentUser.id })
+                    body: JSON.stringify({}) // User ID é pego do token
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Não foi possível solicitar a exclusão.');
@@ -822,6 +869,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }, { once: true });
         confirmationModal.show();
     }
+
+    // --- DASHBOARD (PROTEGIDO) ---
     async function renderDashboardView() {
         const searchContainer = document.getElementById('header-search-container');
         searchContainer.innerHTML = `<input type="search" id="task-search-input" class="form-control" placeholder="🔍 Buscar tarefas...">`;
@@ -888,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchAndRenderTasks();
     }
     
-    // ... (Analytics, Team, Log, SSAP, DueSoon, RenderTasks, etc. sem alterações)
+    // --- ANALYTICS (PROTEGIDO) ---
     async function renderAnalyticsView() {
         mainContent.innerHTML = `
             <div class="content-header"><h2>Análise de Desempenho</h2></div>
@@ -896,7 +945,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div></div>
             </div>`;
         try {
-            const response = await fetch(`${API_URL}/analytics`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/analytics`);
             if (!response.ok) throw new Error('Não foi possível carregar os dados de análise.');
             const data = await response.json();
             document.getElementById('analytics-grid').innerHTML = `
@@ -914,7 +964,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="content-header"><h2>Membros da Equipe</h2></div>
             <div id="team-list" class="team-grid"><div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div></div></div>`;
         try {
-            const response = await fetch(`${API_URL}/users/employees`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/users/employees`);
             if (!response.ok) throw new Error('Não foi possível carregar a lista de funcionários.');
             const employees = await response.json();
             const listEl = document.getElementById('team-list');
@@ -950,7 +1001,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('purge-chat-btn').addEventListener('click', handleAdminPurgeChat);
         document.getElementById('purge-log-btn').addEventListener('click', handleAdminPurgeLog);
         try {
-            const response = await fetch(`${API_URL}/activity-log`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/activity-log`);
             if (!response.ok) throw new Error('Não foi possível carregar o log de atividades.');
             const logs = await response.json();
             const container = document.getElementById('activity-log-container');
@@ -996,7 +1048,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>`;
         try {
-            const response = await fetch(`${API_URL}/admin/users?admin_user_id=${currentUser.id}`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/admin/users`);
             if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível carregar os usuários.');
             const users = await response.json();
             const container = document.getElementById('user-management-container');
@@ -1102,9 +1155,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- ================================== ---
-    // --- FUNÇÃO RENDER TASKS (ATUALIZADA) ---
-    // --- ================================== ---
     
   function renderTasks() {
         const searchTerm = document.getElementById('task-search-input')?.value.toLowerCase() || '';
@@ -1134,7 +1184,6 @@ document.addEventListener('DOMContentLoaded', () => {
         taskList.innerHTML = tasksToRender.length === 0 ? '<p class="text-center text-muted">Nenhuma tarefa encontrada.</p>' : '';
         const isAdminView = (currentUser.role === 'admin' && !currentUser.impersonating);
         tasksToRender.forEach(task => {
-            // <-- MUDANÇA AQUI: Cores alteradas para Laranja (warning) e Ciano (info)
             const priority = {1:{bg:'danger',txt:'Alta'}, 2:{bg:'warning',txt:'Média'}, 3:{bg:'info',txt:'Baixa'}}[task.priority] || {bg:'info', txt:'Baixa'};
             
             const today = new Date();
@@ -1180,7 +1229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- MODAIS / CHAT (ATUALIZADO PARA INCLUIR MODAIS 2FA) ---
+    // --- MODAIS / CHAT ---
     function initializeModalsAndChat() {
         if (!editTaskModal) {
             const el = document.getElementById('editTaskModal');
@@ -1231,7 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (el) confirmationModal = new bootstrap.Modal(el);
         }
         
-        // --- ATUALIZAÇÃO: Inicializa os novos modais de segurança ---
+        // Modais de Segurança
         if (!login2faModal) {
             const el = document.getElementById('login2faModal');
             if(el) login2faModal = new bootstrap.Modal(el, { backdrop: 'static', keyboard: false });
@@ -1250,17 +1299,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.querySelector('#disable-2fa-form').addEventListener('submit', handleDisable2FA);
             }
         }
-        // --- Fim da Atualização ---
         
-        // --- ATUALIZAÇÃO: Inicializa o modal de reset forçado ---
         if (!forceResetModal) {
             const el = document.getElementById('forcePasswordResetModal');
             if (el) forceResetModal = new bootstrap.Modal(el, { backdrop: 'static', keyboard: false });
         }
-        // --- Fim da Atualização ---
 
 
-        // Inicialização do Chat (sem alterações)
+        // Chat
         const chat = document.getElementById('chat-container');
         if (chat && !chat.innerHTML.trim()) {
             chat.innerHTML = `
@@ -1294,11 +1340,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- (Funções de Tarefa, Dropdowns, Filtros, etc. permanecem aqui) ---
-    // ... (populateAssigneeDropdown, populateCategoryDropdown, handleFilterClick, fetchAndRenderTasks, etc.)
+    // --- FUNÇÕES DE DROP ---
     async function populateAssigneeDropdown(selectElement) {
         try {
-            const res = await fetch(`${API_URL}/users/employees`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/users/employees`);
             if (!res.ok) throw new Error('Falha ao buscar funcionários');
             const employees = await res.json();
             selectElement.innerHTML = '<option value="">Ninguém</option>';
@@ -1309,7 +1355,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function populateCategoryDropdown(selectElement, selectedValue = '') {
         try {
-            const res = await fetch(`${API_URL}/categories`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/categories`);
             if (!res.ok) throw new Error('Falha ao buscar categorias');
             const categories = await res.json();
             const firstOption = selectElement.querySelector('option');
@@ -1339,7 +1386,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function fetchAndRenderTasks() {
         try {
-            const res = await fetch(`${API_URL}/tasks?user_id=${currentUser.id}`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks?user_id=${currentUser.id}`);
             if (!res.ok) throw new Error('Falha ao carregar tarefas');
             allTasks = await res.json();
             renderTasks();
@@ -1374,14 +1422,13 @@ document.addEventListener('DOMContentLoaded', () => {
             description: document.getElementById('task-description').value,
             priority: parseInt(document.getElementById('task-priority').value),
             due_date: document.getElementById('task-due-date').value || null,
-            creator_id: currentUser.id, 
             assigned_to_id: assigneeId ? parseInt(assigneeId) : null,
             category_id: categoryId ? parseInt(categoryId) : null
         };
         try {
-            const res = await fetch(`${API_URL}/tasks`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(taskData)
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao criar tarefa');
@@ -1430,14 +1477,13 @@ document.addEventListener('DOMContentLoaded', () => {
             description: document.getElementById('quick-task-description').value,
             priority: parseInt(document.getElementById('quick-task-priority').value),
             due_date: dueDate || null,
-            creator_id: currentUser.id,
             assigned_to_id: assigneeId ? parseInt(assigneeId) : null,
             category_id: document.getElementById('quick-task-category').value || null
         };
         try {
-            const res = await fetch(`${API_URL}/tasks`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(taskData)
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao criar tarefa');
@@ -1460,13 +1506,12 @@ document.addEventListener('DOMContentLoaded', () => {
             priority: parseInt(form.elements['edit-task-priority'].value),
             due_date: form.elements['edit-task-due-date'].value || null,
             assigned_to_id: assigneeId ? parseInt(assigneeId) : null,
-            category_id: form.elements['edit-task-category'].value || null,
-            acting_user_id: currentUser.id
+            category_id: form.elements['edit-task-category'].value || null
         };
         try {
-            const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks/${taskId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(taskData)
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao editar tarefa');
@@ -1480,18 +1525,18 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             let task = allTasks.find(t => t.id === taskId);
             if (!task) {
-                const resTask = await fetch(`${API_URL}/tasks/${taskId}`);
+                // Protegido
+                const resTask = await authorizedFetch(`${API_URL}/tasks/${taskId}`);
                 if (!resTask.ok) throw new Error('Não foi possível obter o estado da tarefa.');
                 task = await resTask.json();
             }
             const currentCompleted = !!task.completed;
             const payload = { 
-                completed: !currentCompleted,
-                acting_user_id: currentUser.id 
+                completed: !currentCompleted
             };
-            const res = await fetch(`${API_URL}/tasks/${taskId}`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks/${taskId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const data = await res.json().catch(() => ({}));
@@ -1509,10 +1554,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/tasks/${taskId}`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/tasks/${taskId}`, { 
                     method: 'DELETE', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ acting_user_id: currentUser.id })
+                    body: JSON.stringify({})
                 });
                 let data;
                 try { data = await res.json(); } catch (e) { data = {}; }
@@ -1530,7 +1575,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function handleOpenEditModal(taskId) {
         try {
-            const res = await fetch(`${API_URL}/tasks/${taskId}`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks/${taskId}`);
             if (!res.ok) throw new Error('Não foi possível carregar os dados da tarefa.');
             const task = await res.json();
             const form = document.getElementById('edit-task-form');
@@ -1567,10 +1613,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/admin/user/${userId}`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/admin/user/${userId}`, { 
                     method: 'DELETE', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                    body: JSON.stringify({})
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Não foi possível excluir o usuário.');
@@ -1591,13 +1637,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/admin/force-reset-password`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/admin/force-reset-password`, { 
                     method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        admin_user_id: currentUser.id,
-                        target_user_id: userId
-                    })
+                    body: JSON.stringify({ target_user_id: userId })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Não foi possível resetar a senha.');
@@ -1612,7 +1655,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function handleAdminOpenEditModal(userId) {
         try {
-            const res = await fetch(`${API_URL}/user/${userId}`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/user/${userId}`);
             if (!res.ok) throw new Error('Não foi possível carregar os dados do usuário.');
             const user = await res.json();
             const form = document.getElementById('admin-user-edit-form');
@@ -1660,13 +1704,12 @@ document.addEventListener('DOMContentLoaded', () => {
             username: form.elements['admin-edit-username'].value.trim(),
             email: email,
             job_title: form.elements['admin-edit-job-title'].value.trim(),
-            role: form.elements['admin-edit-role'].value,
-            acting_user_id: currentUser.id
+            role: form.elements['admin-edit-role'].value
         };
         try {
-            const response = await fetch(`${API_URL}/user/${targetUserId}`, {
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/user/${targetUserId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updatedData)
             });
             const data = await response.json();
@@ -1681,17 +1724,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const confirmationText = `Você está prestes a iniciar uma sessão como '${username}'. Suas ações serão registradas como se fossem dele. Deseja continuar?`;
         if (!confirm(confirmationText)) return;
         try {
-            localStorage.setItem('originalAdminSession', JSON.stringify(currentUser));
-            const resToken = await fetch(`${API_URL}/admin/impersonate`, {
+            // 1. Pede o token de troca (Protegido)
+            const resToken = await authorizedFetch(`${API_URL}/admin/impersonate`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    admin_user_id: currentUser.id,
-                    target_user_id: targetUserId
-                })
+                body: JSON.stringify({ target_user_id: targetUserId })
             });
             const dataToken = await resToken.json();
             if (!resToken.ok) throw new Error(dataToken.error || 'Falha ao iniciar impersonação');
+
+            // 2. Troca o token de troca pelo JWT (Público/Específico)
             const resLogin = await fetch(`${API_URL}/impersonate/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1699,10 +1740,20 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const dataLogin = await resLogin.json();
             if (!resLogin.ok) throw new Error(dataLogin.error || 'Falha ao logar como usuário');
+            
+            // 3. Salva sessão original
+            // CORREÇÃO: Pega o token do storage, pois a variável 'authToken' não existe solta
+            const currentToken = localStorage.getItem('authToken'); 
+            localStorage.setItem('originalAdminToken', currentToken);
+            
+            localStorage.setItem('originalAdminUser', JSON.stringify(currentUser));
+            
+            // 4. Inicia nova sessão
+            localStorage.setItem('authToken', dataLogin.token); // Salva JWT do impersonado
             startSession(dataLogin.user);
+
         } catch (error) {
             alert(`Erro na impersonação: ${error.message}`);
-            localStorage.removeItem('originalAdminSession');
         }
     }
     async function handleOpenCommentsModal(taskId, commentButton) {
@@ -1713,10 +1764,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 badge.remove();
             }
             try {
-                await fetch(`${API_URL}/tasks/${taskId}/mark-as-read`, {
+                // Protegido
+                await authorizedFetch(`${API_URL}/tasks/${taskId}/mark-as-read`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: currentUser.id })
+                    body: JSON.stringify({})
                 });
             } catch (err) {
                 console.error("Falha ao marcar tarefa como lida", err);
@@ -1727,7 +1778,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function renderComments(taskId) {
         try {
-            const res = await fetch(`${API_URL}/tasks/${taskId}/comments`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks/${taskId}/comments`);
             if (!res.ok) throw new Error('Não foi possível carregar os comentários.');
             const comments = await res.json();
             const listEl = document.getElementById('comments-list');
@@ -1744,10 +1796,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = document.getElementById('comment-input').value.trim();
         if (!text) return;
         try {
-            const res = await fetch(`${API_URL}/tasks/${taskId}/comments`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/tasks/${taskId}/comments`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, text })
+                body: JSON.stringify({ text })
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao adicionar comentário');
             document.getElementById('comment-input').value = '';
@@ -1763,10 +1815,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = input.value.trim();
         if (!text) return;
         try {
-            const res = await fetch(`${API_URL}/chat/messages`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/chat/messages`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, text })
+                body: JSON.stringify({ text })
             });
             if (!res.ok) throw new Error((await res.json()).error || 'Erro ao enviar mensagem');
             input.value = '';
@@ -1779,7 +1831,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await markChatAsRead();
         try {
             const cacheBuster = `?_=${new Date().getTime()}`;
-            const res = await fetch(`${API_URL}/chat/messages${cacheBuster}`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/chat/messages${cacheBuster}`);
             if (!res.ok) throw new Error('Não foi possível carregar mensagens do chat.');
             const messages = await res.json();
             const messagesEl = document.getElementById('chat-messages');
@@ -1821,7 +1874,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`;
         const container = document.getElementById('dpo-requests-container');
         try {
-            const response = await fetch(`${API_URL}/admin/dpo-requests?admin_user_id=${currentUser.id}`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/admin/dpo-requests`);
             if (!response.ok) throw new Error((await response.json()).error || 'Não foi possível carregar as solicitações.');
             const requests = await response.json();
             if (requests.length === 0) {
@@ -1836,25 +1890,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const requestTypesMap = {
                     'access': 'Solicitação de Acesso',
                     'correction': 'Solicitação de Correção',
-                    'anonymization': 'Solicitação de Anonimização (Manual)',
-                    'anonymization_request': 'Solicitação de Anonimização (Iniciada pelo Usuário)',
+                    'anonymization': 'Solicitação de Exclusão (Manual)', 
+                    'anonymization_request': 'Solicitação de Exclusão (Iniciada pelo Usuário)',
                     'question': 'Dúvida Geral'
                 };
                 const requestTypeDisplay = requestTypesMap[req.request_type] || req.request_type;
                 if (req.request_type === 'anonymization_request' || req.request_type === 'anonymization') {
                     if (req.scheduled_for) {
                         const scheduledDate = new Date(req.scheduled_for).toLocaleString('pt-BR');
-                        extraInfoHtml = `<p class="mb-2 text-danger"><strong><i class="bi bi-alarm-fill"></i> Anonimização Agendada para:</strong> ${scheduledDate}</p>`;
+                        extraInfoHtml = `<p class="mb-2 text-danger"><strong><i class="bi bi-alarm-fill"></i> Exclusão Agendada para:</strong> ${scheduledDate}</p>`; 
                     }
                     if (req.status === 'pending') {
                         responseHtml = `
                             <div class="mt-3">
                                 <button class="btn btn-danger w-100" data-action="execute-anonymization" data-id="${req.id}" data-username="${req.user_username}">
-                                    <i class="bi bi-shield-x"></i> Executar Anonimização Agora
+                                    <i class="bi bi-shield-x"></i> Executar Exclusão Agora
                                 </button>
-                                <p class="text-muted small mt-1">Atenção: Esta ação é imediata, irreversível e irá anonimizar a conta do usuário ${req.user_username}.</p>
+                                <p class="text-muted small mt-1">Atenção: Esta ação é imediata, irreversível e irá excluir a conta do usuário ${req.user_username}.</p>
                             </div>
-                        `;
+                        `; 
                     } else {
                         const respondedAt = new Date(req.responded_at).toLocaleString('pt-BR');
                         responseHtml = `
@@ -1929,25 +1983,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     function handleAdminExecuteAnonymization(requestId, username) {
-        const confirmationText = `Você confirma a EXECUÇÃO da anonimização para o usuário '${username}' (Solicitação ID ${requestId})? Esta ação é imediata e não pode ser desfeita.`;
+        const confirmationText = `Você confirma a EXECUÇÃO da exclusão para o usuário '${username}' (Solicitação ID ${requestId})? Esta ação é imediata e não pode ser desfeita.`; 
         document.getElementById('confirmation-modal-body').textContent = confirmationText;
         const confirmBtn = document.getElementById('confirm-action-btn');
         const newConfirmBtn = confirmBtn.cloneNode(true);
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/admin/execute-anonymization`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/admin/execute-anonymization`, { 
                     method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        admin_user_id: currentUser.id,
-                        request_id: parseInt(requestId)
-                    })
+                    body: JSON.stringify({ request_id: parseInt(requestId) })
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Não foi possível executar a anonimização.');
+                if (!res.ok) throw new Error(data.error || 'Não foi possível executar a exclusão.'); 
                 confirmationModal.hide();
-                alert(data.message || 'Usuário anonimizado com sucesso.');
+                alert(data.message || 'Usuário excluído com sucesso.'); 
                 renderView('dpo');
             } catch (err) {
                 alert(err.message);
@@ -1968,13 +2019,10 @@ document.addEventListener('DOMContentLoaded', () => {
         submitButton.disabled = true;
         submitButton.textContent = 'Enviando...';
         try {
-            const response = await fetch(`${API_URL}/admin/dpo-request/${requestId}`, {
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/admin/dpo-request/${requestId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    admin_user_id: currentUser.id,
-                    response_text: responseText
-                })
+                body: JSON.stringify({ response_text: responseText })
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Erro ao enviar resposta.');
@@ -1989,7 +2037,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('my-dpo-requests-list');
         if (!container) return; 
         try {
-            const response = await fetch(`${API_URL}/user/dpo-requests?user_id=${currentUser.id}`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/user/dpo-requests?user_id=${currentUser.id}`);
             if (!response.ok) throw new Error('Não foi possível carregar suas solicitações.');
             const requests = await response.json();
             if (requests.length === 0) {
@@ -2003,8 +2052,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const requestTypesMap = {
                     'access': 'Solicitação de Acesso',
                     'correction': 'Solicitação de Correção',
-                    'anonymization': 'Solicitação de Anonimização',
-                    'anonymization_request': 'Solicitação de Anonimização',
+                    'anonymization': 'Solicitação de Exclusão', 
+                    'anonymization_request': 'Solicitação de Exclusão', 
                     'question': 'Dúvida Geral'
                 };
                 const requestTypeDisplay = requestTypesMap[req.request_type] || req.request_type;
@@ -2014,9 +2063,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         responseHtml = `
                             <div class="mt-2">
                                 <span class="badge bg-warning text-dark">Pendente</span>
-                                <p class="small text-muted mb-0 mt-1">Sua conta está agendada para anonimização em: <strong>${scheduledDate}</strong>.</p>
+                                <p class="small text-muted mb-0 mt-1">Sua conta está agendada para exclusão em: <strong>${scheduledDate}</strong>.</p>
                             </div>
-                        `;
+                        `; 
                     } else if (req.status === 'answered') {
                         responseHtml = `<div class="mt-2"><span class="badge bg-success">Processado</span></div>`;
                     }
@@ -2056,7 +2105,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('user-activity-log-container');
         if (!container) return; 
         try {
-            const response = await fetch(`${API_URL}/user/my-activity-log?user_id=${currentUser.id}`);
+            // Protegido
+            const response = await authorizedFetch(`${API_URL}/user/my-activity-log?user_id=${currentUser.id}`);
             if (!response.ok) throw new Error('Não foi possível carregar seu histórico de conclusões.');
             const logs = await response.json();
             if (logs.length === 0) {
@@ -2094,10 +2144,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/admin/dpo-request/${requestId}`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/admin/dpo-request/${requestId}`, { 
                     method: 'DELETE', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                    body: JSON.stringify({})
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Não foi possível excluir a solicitação.');
@@ -2118,10 +2168,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/admin/chat/purge`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/admin/chat/purge`, { 
                     method: 'DELETE', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                    body: JSON.stringify({})
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Não foi possível limpar o chat.');
@@ -2146,10 +2196,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/admin/activity-log/purge`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/admin/activity-log/purge`, { 
                     method: 'DELETE', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                    body: JSON.stringify({})
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Não foi possível limpar o log.');
@@ -2213,7 +2263,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('category-list-container');
         if (!container) return;
         try {
-            const res = await fetch(`${API_URL}/categories`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/categories`);
             if (!res.ok) throw new Error('Não foi possível carregar as categorias.');
             const categories = await res.json();
             if (categories.length === 0) {
@@ -2304,7 +2355,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const errorEl = document.getElementById('category-form-error');
         errorEl.textContent = '';
         const payload = {
-            admin_user_id: currentUser.id,
             name: name,
             description: description
         };
@@ -2315,9 +2365,9 @@ document.addEventListener('DOMContentLoaded', () => {
             method = 'PUT';
         }
         try {
-            const res = await fetch(url, {
+            // Protegido
+            const res = await authorizedFetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
@@ -2342,10 +2392,10 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         newConfirmBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_URL}/admin/categories/${id}`, { 
+                // Protegido
+                const res = await authorizedFetch(`${API_URL}/admin/categories/${id}`, { 
                     method: 'DELETE', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ admin_user_id: currentUser.id })
+                    body: JSON.stringify({})
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Não foi possível excluir a categoria.');
@@ -2364,7 +2414,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const cacheBuster = `&_=${new Date().getTime()}`;
-            const res = await fetch(`${API_URL}/admin/dpo-pending-count?admin_user_id=${currentUser.id}${cacheBuster}`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/admin/dpo-pending-count?${cacheBuster}`);
             const dpoBadge = document.getElementById('dpo-notification-badge');
             if (!dpoBadge) return;
             if (res.ok) {
@@ -2392,7 +2443,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentUser) return; 
         const cacheBuster = `&_=${new Date().getTime()}`;
         try {
-            const res = await fetch(`${API_URL}/chat/unread-count?user_id=${currentUser.id}${cacheBuster}`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/chat/unread-count?user_id=${currentUser.id}${cacheBuster}`);
             if (res.ok) {
                 const data = await res.json();
                 if (data.unreadCount > 0) {
@@ -2412,10 +2464,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function markChatAsRead() {
         document.getElementById('chat-notification-badge').style.display = 'none';
         try {
-            await fetch(`${API_URL}/chat/mark-as-read`, {
+            // Protegido
+            await authorizedFetch(`${API_URL}/chat/mark-as-read`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id })
+                body: JSON.stringify({})
             });
         } catch (e) {
             console.error("Falha ao marcar chat como lido.", e);
@@ -2425,7 +2477,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectElement = document.getElementById('category-filter-select');
         if (!selectElement) return;
         try {
-            const res = await fetch(`${API_URL}/categories`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/categories`);
             if (!res.ok) throw new Error('Falha ao buscar categorias para o filtro');
             const categories = await res.json();
             categories.forEach(cat => {
@@ -2455,10 +2508,11 @@ document.addEventListener('DOMContentLoaded', () => {
         listContainer.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>';
         assignCategoriesModal.show();
         try {
-            const resAll = await fetch(`${API_URL}/categories`);
+            // Protegido
+            const resAll = await authorizedFetch(`${API_URL}/categories`);
             if (!resAll.ok) throw new Error('Falha ao buscar lista de categorias.');
             const allCategories = await resAll.json();
-            const resUser = await fetch(`${API_URL}/admin/user/${userId}/categories?admin_user_id=${currentUser.id}`);
+            const resUser = await authorizedFetch(`${API_URL}/admin/user/${userId}/categories`);
             if (!resUser.ok) throw new Error('Falha ao buscar categorias do usuário.');
             const userCategoryIds = await resUser.json();
             if (allCategories.length === 0) {
@@ -2492,13 +2546,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkedBoxes = form.querySelectorAll('input[name="category_ids"]:checked');
         const selectedCategoryIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
         const payload = {
-            admin_user_id: currentUser.id,
             category_ids: selectedCategoryIds
         };
         try {
-            const res = await fetch(`${API_URL}/admin/user/${userId}/categories`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/admin/user/${userId}/categories`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
@@ -2515,7 +2568,8 @@ document.addEventListener('DOMContentLoaded', () => {
         listContainer.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>';
         manageCategoryUsersModal.show();
         try {
-            const res = await fetch(`${API_URL}/admin/category/${categoryId}/users?admin_user_id=${currentUser.id}`);
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/admin/category/${categoryId}/users`);
             if (!res.ok) throw new Error('Falha ao buscar lista de usuários.');
             const allUsers = await res.json();
             if (allUsers.length === 0) {
@@ -2548,13 +2602,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkedBoxes = form.querySelectorAll('input[name="user_ids"]:checked');
         const selectedUserIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
         const payload = {
-            admin_user_id: currentUser.id,
             user_ids: selectedUserIds
         };
         try {
-            const res = await fetch(`${API_URL}/admin/category/${categoryId}/users`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/admin/category/${categoryId}/users`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
@@ -2568,44 +2621,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- ================================== ---
-    // --- ATUALIZAÇÃO: Novas Funções 2FA (Handlers)
-    // --- ================================== ---
-
-    /**
-     * Etapa 1: Inicia a configuração do 2FA
-     */
+    // --- FUNÇÕES DE 2FA (HANDLERS) ---
     async function handleEnable2FA() {
         try {
-            const res = await fetch(`${API_URL}/user/totp-setup`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/user/totp-setup`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id })
+                body: JSON.stringify({})
             });
             
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro ao iniciar configuração 2FA.');
             
-            // Temos o URI do QR Code (data.provisioning_uri)
             initializeModalsAndChat();
             
-            // Limpa o estado anterior
             document.getElementById('setup-2fa-form').reset();
             document.getElementById('setup-2fa-error').textContent = '';
-            document.getElementById('setup-2fa-secret').textContent = data.secret; // Mostra a chave secreta
+            document.getElementById('setup-2fa-secret').textContent = data.secret; 
             
-            // Gera o QR Code
             const qrContainer = document.getElementById('setup-2fa-qr-code');
-            qrContainer.innerHTML = ''; // Limpa o QR anterior
+            qrContainer.innerHTML = ''; 
             try {
-                // Verifica se a biblioteca qrcode foi carregada
                 if (typeof qrcode === 'undefined') {
                     throw new Error('Biblioteca QR Code não foi carregada.');
                 }
-                const qr = qrcode(0, 'M'); // (typeNumber 0 = auto-detect size, 'M' = error correction level)
+                const qr = qrcode(0, 'M'); 
                 qr.addData(data.provisioning_uri);
                 qr.make();
-                qrContainer.innerHTML = qr.createImgTag(5); // (cell_size = 5px)
+                qrContainer.innerHTML = qr.createImgTag(5); 
             } catch (qrError) {
                 console.error("Erro ao gerar QR Code:", qrError);
                 qrContainer.innerHTML = '<p class="text-danger">Erro ao gerar QR Code. Tente usar a chave secreta manual.</p>';
@@ -2618,9 +2661,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    /**
-     * Etapa 2: Verifica o código 2FA do usuário para ativar
-     */
     async function handleVerify2FA(e) {
         e.preventDefault();
         const err = document.getElementById('setup-2fa-error');
@@ -2628,28 +2668,24 @@ document.addEventListener('DOMContentLoaded', () => {
         err.textContent = '';
         
         try {
-            const res = await fetch(`${API_URL}/user/totp-verify-setup`, {
+            // Protegido
+            const res = await authorizedFetch(`${API_URL}/user/totp-verify-setup`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, totp_code: code })
+                body: JSON.stringify({ totp_code: code })
             });
             
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro ao verificar código.');
             
-            // Sucesso!
             setup2faModal.hide();
             alert('Autenticação de Dois Fatores (2FA) foi ativada com sucesso!');
-            loadProfileData(); // Recarrega o card de perfil
+            loadProfileData(); 
             
         } catch (error) {
             err.textContent = error.message;
         }
     }
     
-    /**
-     * Desativa o 2FA
-     */
     async function handleDisable2FA(e) {
         e.preventDefault();
         const err = document.getElementById('disable-2fa-error');
@@ -2657,19 +2693,18 @@ document.addEventListener('DOMContentLoaded', () => {
         err.textContent = '';
         
         try {
-             const res = await fetch(`${API_URL}/user/totp-disable`, {
+             // Protegido
+             const res = await authorizedFetch(`${API_URL}/user/totp-disable`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, password: password })
+                body: JSON.stringify({ password: password })
             });
             
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Erro ao desativar 2FA.');
             
-            // Sucesso!
             disable2faModal.hide();
             alert('Autenticação de Dois Fatores (2FA) foi desativada.');
-            loadProfileData(); // Recarrega o card de perfil
+            loadProfileData(); 
             
         } catch (error) {
             err.textContent = error.message;
