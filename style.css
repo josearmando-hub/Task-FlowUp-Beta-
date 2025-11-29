@@ -805,25 +805,39 @@ body.sidebar-collapsed #content-wrapper { margin-left: 80px; }
     position: relative;
 }
 
-/* Badge DPO na Sidebar */
+/* --- CORREÇÃO DO BADGE DPO --- */
 #dpo-notification-badge {
+    /* Dimensões Fixas (quadrado/redondo perfeito) */
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px; /* Pequeno espaçamento interno para números maiores */
+    
+    /* Formato Bolinha */
+    border-radius: 50%;
+    
+    /* Tipografia */
     font-size: 0.7rem;
-    padding: 0.2em 0.5em;
-    font-weight: 600;
-    height: 18px;
-    min-width: 18px;
-    line-height: 1;
-    display: none; 
+    font-weight: 700;
+    
+    /* Alinhamento no menu flex */
+    position: static; /* SOBRESCREVE o position: absolute da classe .notification-badge */
+    margin-left: auto; /* Empurra para o final da linha */
+    align-self: center; /* Centraliza verticalmente no link */
+    
+    /* Conteúdo centralizado dentro da bolinha */
+    display: none; /* JS alterna o display, mas quando visível será flex */
     align-items: center;
     justify-content: center;
-    position: relative; 
-    border: none;
-    margin-left: auto;
-    margin-right: 5px;
-    background-color: var(--error-color); 
+    
+    /* Evita distorção */
+    flex-shrink: 0;
+    line-height: 1;
+    
+    background-color: var(--error-color);
     color: white; 
-    border-radius: 5px;
+    border: none;
 }
+
 body.sidebar-collapsed #dpo-notification-badge {
     display: none;
 }
