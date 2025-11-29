@@ -2,231 +2,145 @@
 
 ![Logo do Task FlowUp](image-2.1.png)
 
-Uma plataforma SaaS de gerenciamento de tarefas focada em segurança, produtividade e conformidade com a LGPD.
+O **Task FlowUp** é uma aplicação full-stack completa para gerenciamento de tarefas, projetada como uma plataforma interna (SaaS) para equipes. Ele fornece ferramentas robustas para gerenciamento de projetos, comunicação de equipe e monitoramento de produtividade, com um forte foco em segurança (2FA, Hashing PBKDF2) e conformidade com a LGPD.
 
-O Task FlowUp é uma aplicação Full-Stack robusta projetada para equipes que necessitam de controle granular sobre tarefas e comunicação. Diferente de to-do lists comuns, este projeto implementa uma arquitetura de segurança corporativa, utilizando JWT (JSON Web Tokens), autenticação de dois fatores (2FA) e um módulo dedicado à Lei Geral de Proteção de Dados.
+A aplicação utiliza um design **Neobrutalista**, focado em alto contraste, bordas sólidas e sombras nítidas para uma interface de usuário moderna e acessível.
 
-A interface segue a tendência de design Neobrutalista, oferecendo alto contraste, acessibilidade e uma estética moderna.
+---
 
-🛡️ Destaques de Segurança & Arquitetura
-O diferencial do Task FlowUp é a engenharia de segurança aplicada no backend:
+## 🚀 Principais Funcionalidades
 
-Autenticação via JWT: O sistema é stateless. O login gera um token assinado (HS256) com validade de 24 horas, armazenado no cliente e enviado via header Authorization: Bearer.
+A plataforma é dividida por níveis de permissão (Administrador e Funcionário), oferecendo um conjunto de recursos que vão desde o gerenciamento básico de tarefas até ferramentas avançadas de auditoria e segurança.
 
-Criptografia de Senha: Utiliza PBKDF2-HMAC-SHA256 com 250.000 iterações e Salts únicos por usuário.
+### 1. Autenticação e Segurança (Foco Principal)
 
-2FA (TOTP): Suporte nativo a autenticação de dois fatores (compatível com Google Authenticator/Authy), gerando QR Codes no frontend.
+* **Hashing de Senha Robusto:** Utiliza **PBKDF2-HMAC-SHA256** com 250.000 iterações e um `salt` criptográfico exclusivo para cada usuário.
+* **Migração de Hash:** O sistema detecta e migra automaticamente hashes de senha legados (SHA256 simples) para o novo formato PBKDF2 no momento do login.
+* **Autenticação de Dois Fatores (2FA):** Os usuários podem habilitar o 2FA (baseado em TOTP) em seus perfis, exigindo um código de aplicativo (como Google Authenticator) no login.
+* **Chave de Administrador:** O registro de contas de `admin` é protegido por uma chave secreta (`ADMIN_REGISTRATION_KEY`) definida no ambiente do servidor.
+* **Validação de Frontend:** Feedback em tempo real no formulário de registro sobre a força da senha (requisitos de maiúsculas, minúsculas, números e símbolos).
 
-LGPD & Privacy by Design:
+### 2. Gestão de Tarefas (CRUD)
 
-Direito ao Esquecimento: Módulo DPO dedicado.
+* **Dashboard Completo:** Criação, edição e exclusão de tarefas.
+* **Atribuição e Detalhes:** Tarefas incluem prioridade, prazo e usuário atribuído.
+* **Comentários por Tarefa:** Cada tarefa possui uma seção de comentários.
+* **Notificações de Leitura:** O sistema rastreia quais comentários o usuário ainda não leu em cada tarefa, exibindo um contador no card.
+* **Filtros e Busca:** O dashboard permite filtrar tarefas (Todas, Minhas, Atrasadas) e fazer busca em tempo real.
+* **Painel "Vencendo em Breve":** Um painel de destaque mostra tarefas que vencem nos próximos 7 dias.
 
-Anonimização: Dados de usuários excluídos são anonimizados (ex: usuario_anonimizado_ID) em vez de deletados, preservando a integridade referencial dos relatórios e logs.
+### 3. Controle de Acesso e Categorias (RBAC)
 
-RBAC (Role-Based Access Control): Controle de acesso granular onde administradores definem quais categorias de tarefas cada funcionário pode visualizar.
+* **Gerenciamento de Categorias:** Administradores podem criar, editar e excluir "Categorias" (como pastas) para organizar tarefas.
+* **Controle de Acesso (M2M):** Administradores podem definir **quais funcionários** têm permissão para ver **quais categorias**.
+* **Visão Segura:** Funcionários só podem visualizar tarefas que (1) pertencem a uma categoria à qual têm acesso, ou (2) não possuem categoria (consideradas "públicas").
 
-✨ Funcionalidades
-👤 Para Todos os Usuários
-Dashboard Interativo: Filtros por "Minhas Tarefas", "Atrasadas" e busca em tempo real.
+### 4. Painel de Administração (SSAP)
 
-Gestão de Tarefas: Criar, editar, comentar e concluir tarefas.
+* **Gerenciamento de Usuários (SSAP):** Uma visão (`/api/admin/users`) que permite ao admin ver, editar e excluir qualquer usuário do sistema.
+* **Impersonação de Usuário:** O admin pode "logar como" um funcionário para ver a plataforma de sua perspectiva, ideal para auditoria de permissões ou suporte.
+* **Redefinição de Senha Forçada:** O admin pode forçar qualquer usuário a redefinir sua senha no próximo login.
+* **Log de Atividades:** Um log de auditoria detalhado registra ações importantes (logins, criação de tarefas, exclusão de usuários, etc.).
+* **Limpeza de Dados (Purge):** Funções perigosas para limpar permanentemente todo o histórico de chat ou o log de atividades.
 
-Chat em Tempo Real: Comunicação global com a equipe com notificações de mensagens não lidas.
+### 5. Conformidade com LGPD (Central DPO)
 
-Perfil Seguro: Alteração de senha, ativação de 2FA e solicitações ao DPO.
+* **Canal do Titular:** Usuários podem, de seus perfis, abrir solicitações formais ao DPO (Encarregado de Proteção de Dados) para "acesso", "correção" ou "exclusão" de dados.
+* **Central DPO (Admin):** Admins têm uma visão dedicada para gerenciar e responder a todas as solicitações de LGPD, com um contador de pendências na sidebar.
+* **Fluxo de Auto-Exclusão:** Quando um usuário solicita a exclusão da própria conta, o sistema agenda automaticamente uma **anonimização** para 7 dias.
+* **Anonimização (Não Exclusão):** A exclusão de um usuário (seja pelo admin ou auto-solicitada) não é um `DELETE` destrutivo. O sistema **anonimiza** os dados (ex: `username` vira `usuario_anonimizado_123`), preservando a integridade de registros históricos (tarefas, comentários) sem manter dados pessoais identificáveis (PII).
 
-👮 Para Administradores (Admin Panel)
-Gestão de Usuários (SSAP): CRUD completo de usuários e definição de cargos.
+### 6. Comunicação
 
-Gestão de Categorias: Criação de "pastas" de tarefas e atribuição de permissões de visualização para funcionários específicos.
+* **Chat Global:** Um chat em tempo real disponível para todos os usuários da organização.
+* **Notificações de Chat:** Um ícone de notificação indica novas mensagens não lidas no chat.
 
-Auditoria:
+---
 
-Impersonação (Ghost Login): O admin pode visualizar o sistema como se fosse um funcionário específico para debugging.
+## 🛠️ Pilha de Tecnologia (Stack)
 
-Log de Atividades: Registro imutável de ações críticas (logins, deleções, resets).
+### Backend (app.py)
 
-Central DPO: Painel para responder e executar solicitações de privacidade e exclusão de contas.
+* **Framework:** Flask
+* **Banco de Dados:** MySQL (via `Flask-MySQLdb`)
+* **Segurança (2FA):** `pyotp`
+* **Segurança (Hashing):** `hashlib` (PBKDF2)
+* **API:** RESTful, com CORS habilitado (`Flask-CORS`)
 
-🛠️ Tech Stack
-Backend
-Linguagem: Python 3.9+
+### Frontend (script.js, index.html)
 
-Framework: Flask
+* **Lógica:** JavaScript Puro (Vanilla ES6+)
+* **Estrutura:** HTML5
+* **Estilo:** CSS3 com design Neobrutalista
+* **UI (Componentes):** Bootstrap 5
+* **QR Code (2FA):** `qrcode.min.js`
 
-Auth: PyJWT (JSON Web Tokens)
+### Banco de Dados (Não fornecido)
 
-Database: MySQL (via flask_mysqldb)
+* **Tipo:** MySQL
+* **Observação:** O schema do banco de dados (`schema.sql`) não foi fornecido. Ele deve ser criado manualmente com base nas consultas SQL presentes em `app.py`.
 
-Security: hashlib (PBKDF2), pyotp (2FA), secrets
+---
 
-Frontend
-Core: Vanilla JavaScript (ES6+)
+## 🔧 Instalação e Execução
 
-Styling: CSS3 (Neobrutalism) + Bootstrap 5
+Siga estes passos para configurar e rodar o projeto localmente.
 
-Libraries: qrcode.js (Geração de QR Code no cliente)
+### 1. Pré-requisitos
 
-🚀 Instalação e Configuração
-1. Pré-requisitos
-Python 3.x
+* Python 3.9+
+* Servidor de banco de dados MySQL (ou MariaDB)
+* `pip` (gerenciador de pacotes do Python)
 
-MySQL Server
+### 2. Configuração do Banco de Dados
 
-Git
+1.  Acesse seu cliente MySQL.
+2.  Crie o banco de dados para a aplicação:
+    ```sql
+    CREATE DATABASE task_flowup CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    ```
+3.  **Etapa Crítica:** Você deve criar manualmente todas as tabelas (ex: `users`, `tasks`, `task_categories`, `dpo_requests`, `activity_log`, etc.) com base nas consultas SQL encontradas em `app.py`.
 
-2. Configuração do Banco de Dados
-Crie um banco de dados chamado task_flowup.
+### 3. Configuração do Backend (Flask)
 
-Nota: Como o projeto utiliza SQL puro, você precisará criar as tabelas manualmente. Abaixo está o esquema sugerido baseado no código:
+1.  Crie e ative um ambiente virtual:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # (ou venv\Scripts\activate no Windows)
+    ```
+2.  Instale as dependências do Python:
+    ```bash
+    pip install Flask Flask-MySQLdb flask-cors pyotp
+    ```
+3.  Defina as variáveis de ambiente necessárias para o `app.py`:
+    * `MYSQL_PASSWORD`: A senha do seu banco de dados.
+    * `ADMIN_KEY`: A chave secreta para registro de admins (ex: `admin-secret-key-123`).
 
-<details> <summary>📂 Clique para ver o SQL de Criação das Tabelas</summary>
+    *No Linux/macOS:*
+    ```bash
+    export MYSQL_PASSWORD="sua_senha_mysql"
+    export ADMIN_KEY="sua_chave_admin_secreta"
+    ```
+    *No Windows (PowerShell):*
+    ```powershell
+    $env:MYSQL_PASSWORD = "sua_senha_mysql"
+    $env:ADMIN_KEY = "sua_chave_admin_secreta"
+    ```
+4.  Execute o servidor Flask (ele rodará na porta `5001`):
+    ```bash
+    python app.py
+    ```
 
-SQL
+### 4. Execução do Frontend
 
-CREATE DATABASE task_flowup;
-USE task_flowup;
+1.  Garanta que todos os arquivos (`index.html`, `script.js`, `style.css`, `image.png`) estejam na mesma pasta.
+2.  **Abra o arquivo `index.html` diretamente no seu navegador** (ex: Google Chrome, Firefox).
 
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(100) NOT NULL UNIQUE,
-    email VARCHAR(100) UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    salt VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'funcionario') NOT NULL,
-    job_title VARCHAR(100),
-    needs_password_reset BOOLEAN DEFAULT 0,
-    is_totp_enabled BOOLEAN DEFAULT 0,
-    totp_secret VARCHAR(255),
-    chat_last_read_at DATETIME
-);
+O `script.js` está configurado para se comunicar automaticamente com a API em `http://127.0.0.1:5001`.
 
-CREATE TABLE task_categories (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    description TEXT
-);
+---
 
-CREATE TABLE user_categories (
-    user_id INT,
-    category_id INT,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (category_id) REFERENCES task_categories(id)
-);
-
-CREATE TABLE tasks (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    title VARCHAR(200) NOT NULL,
-    description TEXT,
-    priority INT,
-    due_date DATE,
-    completed BOOLEAN DEFAULT 0,
-    creator_id INT,
-    assigned_to_id INT,
-    category_id INT,
-    created_at DATETIME,
-    FOREIGN KEY (creator_id) REFERENCES users(id),
-    FOREIGN KEY (assigned_to_id) REFERENCES users(id),
-    FOREIGN KEY (category_id) REFERENCES task_categories(id)
-);
-
-CREATE TABLE task_comments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    task_id INT,
-    user_id INT,
-    text TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (task_id) REFERENCES tasks(id),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE task_read_timestamps (
-    user_id INT,
-    task_id INT,
-    last_read_at DATETIME,
-    PRIMARY KEY (user_id, task_id)
-);
-
-CREATE TABLE chat_messages (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    text TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE activity_log (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    action_text TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE dpo_requests (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    request_type VARCHAR(50),
-    message_text TEXT,
-    status VARCHAR(50),
-    response_text TEXT,
-    responded_by_id INT,
-    created_at DATETIME,
-    responded_at DATETIME,
-    scheduled_for DATETIME
-);
-</details>
-
-3. Configuração do Backend
-Clone o repositório e instale as dependências:
-
-Bash
-
-git clone https://github.com/seu-usuario/task-flowup.git
-cd task-flowup
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
-
-pip install Flask Flask-MySQLdb flask-cors pyotp pyjwt
-Configure as variáveis de ambiente (ou edite o app.py para desenvolvimento):
-
-Linux/Mac:
-
-Bash
-
-export MYSQL_PASSWORD="sua_senha_root"
-export SECRET_KEY="chave_super_secreta_para_jwt"
-export ADMIN_KEY="chave_para_criar_primeiro_admin"
-Windows (PowerShell):
-
-PowerShell
-
-$env:MYSQL_PASSWORD="sua_senha_root"
-$env:SECRET_KEY="chave_super_secreta_para_jwt"
-$env:ADMIN_KEY="chave_para_criar_primeiro_admin"
-Execute o servidor:
-
-Bash
-
-python app.py
-O servidor rodará em http://127.0.0.1:5001.
-
-4. Execução do Frontend
-Basta abrir o arquivo index.html no seu navegador. Não é necessário um servidor web separado para desenvolvimento, pois o script.js faz chamadas diretas (CORS habilitado) para a API local.
-
-🎨 Design System
-O projeto utiliza um design system customizado baseado em Neobrutalismo:
-
-Fonte: Poppins (Google Fonts)
-
-Cores Primárias:
-
-Verde: #10b981 (Ação/Sucesso)
-
-Azul: #0ea5e9 (Informação/Secundário)
-
+## 📂 Estrutura do Projeto
 Fundo: #e0ffff (Ciano Claro)
 
 Estilo: Bordas pretas de 2px, sombras sólidas (hard shadows) e alto contraste.
