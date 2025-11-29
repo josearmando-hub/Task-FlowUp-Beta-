@@ -2,7 +2,7 @@
 
 ![Logo do Task FlowUp](image-2.1.png)
 
-O **Task FlowUp** é uma aplicação full-stack para gerenciamento de tarefas, projetada como uma plataforma interna (SaaS) para equipes. O sistema oferece ferramentas robustas para gestão de projetos, comunicação e monitoramento de produtividade, com foco prioritário em segurança (JWT, 2FA) e conformidade com a LGPD.
+**Task FlowUp** é uma aplicação full-stack para gerenciamento de tarefas, projetada como uma plataforma interna (SaaS) para equipes. O sistema oferece ferramentas robustas para gestão de projetos, comunicação e monitoramento de produtividade, com foco prioritário em segurança (JWT, 2FA) e conformidade com a LGPD.
 
 A interface utiliza um design **Neobrutalista**, caracterizado por alto contraste, bordas sólidas e sombras nítidas para garantir máxima legibilidade e uma estética moderna.
 
@@ -123,4 +123,5 @@ Siga estes passos atualizados para configurar o ambiente com suporte a JWT.
 ---
 
 ## 📂 Estrutura do Projeto
-## 📂 Estrutura do Projetoomaticamente para o login.
+
+/ ├── app.py # API Flask com Auth JWT, Rotas e Regras de Negócio ├── script.js # Lógica Frontend, interceptors de Fetch e Gestão de UI ├── index.html # Estrutura HTML, Modais de Termos e Layout Base ├── style.css # Design System Neobrutalista ├── image.png # Logo da aplicação └── README.md # Documentação do projeto
